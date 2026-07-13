@@ -63,6 +63,74 @@ def test_training_dropout_does_not_change_reported_attention_normalization() -> 
     assert torch.allclose(attention.sum(dim=(1, 2)), torch.ones(2), atol=1e-6)
 
 
+def test_fixed_lag_aligns_each_forecast_horizon_without_future_sources() -> None:
+    module = DirectedLagAwareMessagePassing(1, edge_dim=1, max_lag=3, lag_mode="fixed_lag")
+    _make_uniform(module)
+    h_seq = torch.tensor(
+        [[[[1.0], [0.0]], [[2.0], [0.0]], [[3.0], [0.0]], [[4.0], [0.0]]]]
+    )
+
+    upstream, attention = module.forward_horizons(
+        h_seq,
+        h_seq[:, -1],
+        torch.tensor([[0], [1]]),
+        torch.tensor([[2.0]]),
+        output_window=4,
+    )
+
+    assert upstream.shape == (1, 4, 2, 1)
+    assert attention.shape == (1, 4, 1, 4)
+    assert torch.allclose(upstream[0, :, 1, 0], torch.tensor([3.0, 4.0, 0.0, 0.0]))
+    assert torch.allclose(attention[0, :, 0].sum(dim=-1), torch.tensor([1.0, 1.0, 0.0, 0.0]))
+
+
+def test_learned_horizon_attention_normalizes_only_over_observable_candidates() -> None:
+    module = DirectedLagAwareMessagePassing(
+        2,
+        edge_dim=1,
+        max_lag=2,
+        lag_mode="learned_lag",
+        prior_strength=0.0,
+    )
+    h_seq = torch.randn(2, 5, 3, 2)
+    edges = torch.tensor([[0, 2], [1, 1]])
+
+    upstream, attention = module.forward_horizons(
+        h_seq, h_seq[:, -1], edges, torch.ones(2, 1), output_window=4
+    )
+
+    assert upstream.shape == (2, 4, 3, 2)
+    assert attention.shape == (2, 4, 2, 3)
+    sums = attention.sum(dim=(2, 3))
+    assert torch.allclose(sums[:, :2], torch.ones(2, 2), atol=1e-6)
+    assert torch.equal(sums[:, 2:], torch.zeros(2, 2))
+    assert torch.equal(upstream[:, 2:], torch.zeros_like(upstream[:, 2:]))
+
+
+def test_learned_horizon_attention_is_anchored_to_travel_time_prior() -> None:
+    module = DirectedLagAwareMessagePassing(
+        1,
+        edge_dim=1,
+        max_lag=4,
+        lag_mode="learned_lag",
+        prior_scale_days=1.0,
+        prior_strength=2.0,
+    )
+    _make_uniform(module)
+    h_seq = torch.ones(1, 6, 2, 1)
+
+    _, attention = module.forward_horizons(
+        h_seq,
+        h_seq[:, -1],
+        torch.tensor([[0], [1]]),
+        torch.tensor([[3.0]]),
+        output_window=1,
+    )
+
+    assert attention[0, 0, 0].argmax() == 3
+    assert attention[0, 0, 0, 3] > 0.5
+
+
 @torch.no_grad()
 def test_cuda_mixed_precision_keeps_attention_stable() -> None:
     if not torch.cuda.is_available():

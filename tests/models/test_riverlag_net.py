@@ -30,3 +30,8 @@ def test_riverlagnet_preserves_output_axes_for_graph_and_lag_ablations(
         time_features=torch.randn(2, 8, 4),
     )
     assert output.shape == (2, 6, 4, 3)
+    if graph_variant == "no_graph":
+        assert model.attention_weights is None
+    else:
+        assert model.attention_weights is not None
+        assert model.attention_weights.shape[:2] == (2, 6)

@@ -6,3 +6,5 @@ graph_variant: directed
 lag_mode: learned_lag
 dropout: 0.1
 graph_seed: ${seed}
+lag_prior_scale_days: 1.0
+lag_prior_strength: 2.0

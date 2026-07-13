@@ -30,6 +30,8 @@ class RiverLagNet(nn.Module):
         lag_mode: str = "learned_lag",
         dropout: float = 0.0,
         graph_seed: int = 42,
+        lag_prior_scale_days: float = 1.0,
+        lag_prior_strength: float = 2.0,
         **_: object,
     ) -> None:
         super().__init__()
@@ -37,10 +39,17 @@ class RiverLagNet(nn.Module):
             raise ValueError("unsupported graph_variant")
         self.graph_variant = graph_variant
         self.graph_seed = graph_seed
+        self.output_window = output_window
         self.input_encoder = InputMaskEncoder(value_dim, static_dim, time_dim, hidden_dim)
         self.temporal_encoder = NodeTemporalGRU(hidden_dim, hidden_dim)
         self.message_passing = DirectedLagAwareMessagePassing(
-            hidden_dim, edge_dim, max_lag, lag_mode, dropout
+            hidden_dim,
+            edge_dim,
+            max_lag,
+            lag_mode,
+            dropout,
+            lag_prior_scale_days,
+            lag_prior_strength,
         )
         self.fusion = LocalUpstreamGatedFusion(hidden_dim)
         self.decoder = MultiHorizonMultiTargetDecoder(hidden_dim, output_window, target_dim)
@@ -59,16 +68,21 @@ class RiverLagNet(nn.Module):
         """Return `y_hat [B,T_out,N,3]`."""
         encoded = self.input_encoder(x, x_mask, x_quality, static, time_features)
         h_seq, h_local = self.temporal_encoder(encoded)
+        local_by_horizon = h_local[:, None].expand(-1, self.output_window, -1, -1)
         if self.graph_variant == "no_graph":
             self.attention_weights = None
-            fused = h_local
+            fused = local_by_horizon
         else:
             variant_edges, variant_attr = build_graph_variant(
                 edge_index, edge_attr, self.graph_variant, self.graph_seed
             )
-            h_upstream, attention = self.message_passing(
-                h_seq, h_local, variant_edges, variant_attr
+            h_upstream, attention = self.message_passing.forward_horizons(
+                h_seq,
+                h_local,
+                variant_edges,
+                variant_attr,
+                output_window=self.output_window,
             )
             self.attention_weights = attention
-            fused = self.fusion(h_local, h_upstream)
+            fused = self.fusion(local_by_horizon, h_upstream)
         return self.decoder(fused)

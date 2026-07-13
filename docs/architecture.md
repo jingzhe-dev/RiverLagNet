@@ -31,15 +31,29 @@ The GRU is a local temporal encoder, not the principal innovation. The graph mod
 
 ## Joint directed lag attention
 
-For destination `i`, source `j`, and discrete lag `τ`:
+For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:
 
 ```text
-m_i = sum_(j in Up(i)) sum_(τ=0..max_lag) α_(ijτ) W h_(j,t-τ)
+m_(i,h) = sum_(j in Up(i)) sum_(τ=h..max_lag) α_(ijhτ) W h_(j,t+h-τ)
 ```
 
-Scores use the destination local state, source lagged state, encoded edge attributes, and a learned lag embedding. Softmax is computed jointly over every incoming edge and available lag for each destination node. Consequently, that complete candidate set sums to one. A node with no incoming edges receives an exact zero upstream state.
+This horizon alignment prevents the model from using an unobserved future
+source: a lag is available for lead `h` only when `τ >= h`. Horizons beyond
+`max_lag` receive an exact zero upstream state and fall back to the local
+forecast. Scores use the destination local state, aligned source state,
+encoded edge attributes, and a learned lag embedding. Learned-lag scores add
+a configurable Gaussian log-prior centered on `travel_time_prior_days`; the
+neural score remains a trainable residual that can move probability away from
+the prior. Softmax is computed jointly over every incoming edge and available
+lag for each destination and horizon. Consequently, each non-empty candidate
+set sums to one. A node with no incoming edges receives an exact zero upstream
+state.
 
-`no_lag` makes only `τ=0` available. `fixed_lag` selects the rounded and clipped `travel_time_prior_days` channel on each edge while still normalizing over incoming edges. `learned_lag` exposes every available lag from zero through `max_lag`. Dropout affects the message path but not the reported normalized weights.
+`no_lag` is the static-graph ablation and repeats the latest source state at
+every horizon. `fixed_lag` selects the rounded and clipped
+`travel_time_prior_days` channel when that source time is observable.
+`learned_lag` exposes every causally observable lag through `max_lag`. Dropout
+affects the message path but not the reported normalized weights.
 
 ## Fusion and decoding
 
@@ -54,7 +68,10 @@ incoming message therefore returns `h_local` exactly instead of attenuating
 its local representation. This protects the local forecast while allowing a
 useful upstream correction to be learned.
 
-The decoder adds a learned embedding for each future horizon to every node state, applies a shared decoder, then uses three target-specific scalar heads. The output axes are never collapsed at the public interface.
+Fusion now receives horizon-specific local and upstream states. The decoder
+adds a learned embedding for each future horizon, applies a shared decoder,
+then uses three target-specific scalar heads. The output axes are never
+collapsed at the public interface.
 
 ## Training
 

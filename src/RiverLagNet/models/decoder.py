@@ -17,7 +17,14 @@ class MultiHorizonMultiTargetDecoder(nn.Module):
         self.heads = nn.ModuleList(nn.Linear(hidden_dim, 1) for _ in range(target_dim))
 
     def forward(self, node_state: Tensor) -> Tensor:
-        """Return forecasts with shape `[B, T_out, N, target_dim]`."""
-        context = node_state[:, None] + self.horizon_embedding[None, :, None]
+        """Decode shared `[B,N,D]` or horizon-specific `[B,T_out,N,D]` states."""
+        if node_state.ndim == 3:
+            context = node_state[:, None] + self.horizon_embedding[None, :, None]
+        elif node_state.ndim == 4:
+            if node_state.shape[1] != self.horizon_embedding.shape[0]:
+                raise ValueError("horizon-specific state length must equal output_window")
+            context = node_state + self.horizon_embedding[None, :, None]
+        else:
+            raise ValueError("node_state must have shape [B,N,D] or [B,T_out,N,D]")
         decoded = self.shared(context)
         return torch.cat([head(decoded) for head in self.heads], dim=-1)

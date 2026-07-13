@@ -24,6 +24,14 @@ def test_decoder_keeps_horizon_node_and_target_dimensions() -> None:
     assert output.shape == (2, 7, 5, 3)
 
 
+def test_decoder_accepts_horizon_specific_node_states() -> None:
+    decoder = MultiHorizonMultiTargetDecoder(hidden_dim=10, output_window=7, target_dim=3)
+
+    output = decoder(torch.randn(2, 7, 5, 10))
+
+    assert output.shape == (2, 7, 5, 3)
+
+
 def test_fusion_is_identity_when_no_upstream_message_exists() -> None:
     fusion = LocalUpstreamGatedFusion(hidden_dim=8)
     local = torch.randn(2, 5, 8)
