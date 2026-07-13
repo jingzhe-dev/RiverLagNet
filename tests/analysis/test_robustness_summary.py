@@ -96,6 +96,8 @@ def test_summary_outputs_json_and_decision_ready_markdown(tmp_path: Path) -> Non
 
     saved = json.loads(json_path.read_text(encoding="utf-8"))
     markdown = markdown_path.read_text(encoding="utf-8")
+    assert b"\r\n" not in json_path.read_bytes()
+    assert b"\r\n" not in markdown_path.read_bytes()
     assert saved["seeds"] == [42, 43]
     assert "Condition-level validation results" in markdown
     assert "Paired RiverLagNet mechanism deltas" in markdown

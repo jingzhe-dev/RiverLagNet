@@ -40,6 +40,19 @@ Positive values favor the full directed learned-lag model over the named ablatio
 
 The fixed-lag condition receives the exact synthetic travel-time prior and is therefore an oracle-like comparator. The undirected condition contains every correct edge plus reverse edges, so it is reported but is not a primary directionality decision in this suite.
 
+## Held-out test results
+
+These metrics summarize only the five full learned-lag checkpoints after all validation comparisons were fixed.
+
+| Metric | Runs | Mean ± SD | Min | Max |
+|---|---:|---:|---:|---:|
+| test_macro_nse | 5 | 0.4024 ± 0.1600 | 0.2614 | 0.6005 |
+| test_macro_mae | 5 | 0.5593 ± 0.1065 | 0.4470 | 0.6893 |
+| test_macro_rmse | 5 | 0.7656 ± 0.2049 | 0.5550 | 1.0978 |
+| test_nse_NH3N | 5 | 0.3909 ± 0.2293 | 0.0043 | 0.5730 |
+| test_nse_CODMn | 5 | 0.1462 ± 0.2997 | -0.2265 | 0.5092 |
+| test_nse_TP | 5 | 0.6701 ± 0.1263 | 0.4998 | 0.7913 |
+
 ## Interpretation boundary
 
 The predeclared engineering rule calls a mechanism directionally supported only when the paired mean delta is positive and the full model wins at least three of five seeds. Test data are excluded from these decisions. Five seeds quantify pipeline variability but do not establish statistical significance.

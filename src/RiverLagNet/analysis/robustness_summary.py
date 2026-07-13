@@ -273,7 +273,14 @@ def write_validation_summary(
     markdown_path = Path(markdown_path)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
-    json_path.write_text(
-        json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    _write_text_lf(
+        json_path,
+        json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
     )
-    markdown_path.write_text(render_validation_markdown(summary), encoding="utf-8")
+    _write_text_lf(markdown_path, render_validation_markdown(summary))
+
+
+def _write_text_lf(path: Path, content: str) -> None:
+    """Write version-controlled text with stable LF line endings on every OS."""
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(content)

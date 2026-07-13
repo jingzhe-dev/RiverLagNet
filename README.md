@@ -141,7 +141,26 @@ self-loops or true-edge overlap. Run the frozen five-seed matrix with:
 ```powershell
 conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_horizon_v5
 conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_horizon_v5 --summarize
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_horizon_v5 --evaluate-final
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_horizon_v5 --summarize
 ```
+
+The frozen horizon-v5 run completed all 45 training jobs without a crash. Full
+learned-lag validation macro NSE was `0.4893 ± 0.0741`. Paired validation
+macro-NSE deltas were `+0.0065` versus `no_graph` (3/5 wins), `+0.0042`
+versus the strict `shuffled_graph` control (4/5), and `+0.0016` versus
+`no_lag` (5/5); all three pass the predeclared directional-support rule. Only
+after those validation decisions were frozen, the five learned-lag checkpoints
+were evaluated once on held-out test data: macro NSE was `0.4024 ± 0.1600`,
+with mean target NSE `0.3909` for NH3N, `0.1462` for CODMn, and `0.6701` for
+TP. The relatively weak and variable CODMn result remains a limitation. See
+the [final validation and test report](docs/identifiable_horizon_v5_report_2026-07-13.md)
+and machine-readable [summary](experiments/identifiable_horizon_v5_summary.json).
+
+These results establish the intended directed-lag mechanism only on the
+constructed identifiable benchmark. They are not evidence of field accuracy,
+causal effects, or deployment readiness; real three-target daily data remain
+the next external dependency.
 
 ## Models and ablations
 
