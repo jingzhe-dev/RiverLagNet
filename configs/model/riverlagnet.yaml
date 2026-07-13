@@ -1,0 +1,8 @@
+name: riverlagnet
+hidden_dim: 64
+target_dim: 3
+max_lag: 14
+graph_variant: directed
+lag_mode: learned_lag
+dropout: 0.1
+graph_seed: ${seed}

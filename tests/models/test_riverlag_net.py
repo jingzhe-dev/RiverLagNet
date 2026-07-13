@@ -1,0 +1,32 @@
+import pytest
+import torch
+
+from RiverLagNet.models.riverlag_net import RiverLagNet
+
+
+@pytest.mark.parametrize("graph_variant", ["directed", "undirected", "shuffled", "no_graph"])
+@pytest.mark.parametrize("lag_mode", ["no_lag", "fixed_lag", "learned_lag"])
+def test_riverlagnet_preserves_output_axes_for_graph_and_lag_ablations(
+    graph_variant: str, lag_mode: str
+) -> None:
+    model = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=3,
+        graph_variant=graph_variant,
+        lag_mode=lag_mode,
+    )
+    output = model(
+        x=torch.randn(2, 8, 4, 3),
+        x_mask=torch.ones(2, 8, 4, 3, dtype=torch.bool),
+        x_quality=torch.ones(2, 8, 4, 3),
+        static=torch.randn(4, 2),
+        edge_index=torch.tensor([[0, 1, 1], [1, 2, 3]]),
+        edge_attr=torch.tensor([[4.0, 0.1, 1.0], [3.0, 0.2, 2.0], [2.0, 0.3, 1.0]]),
+        time_features=torch.randn(2, 8, 4),
+    )
+    assert output.shape == (2, 6, 4, 3)
