@@ -1,0 +1,150 @@
+{
+  "dataset": "china-real-daily-v0.1",
+  "commit": "ba67183679c297d111c4a03d556d9f3741b355f1",
+  "seed": 42,
+  "protocol": {
+    "input_days": 90,
+    "output_days": 30,
+    "split": [
+      0.7,
+      0.15,
+      0.15
+    ],
+    "selection_metric": "validation macro NSE",
+    "precision": "bf16-mixed",
+    "max_epochs": 50,
+    "early_stopping_patience": 8
+  },
+  "conditions": {
+    "persistence": {
+      "experiment": "china_real_daily_persistence_seed42",
+      "validation": {
+        "val_macro_nse": 0.29253387451171875,
+        "val_macro_mae": 0.21697330474853516,
+        "val_macro_rmse": 0.5632789731025696,
+        "duration_s": 2.0999088999960804,
+        "peak_vram_gb": 0.0718994140625
+      },
+      "test": {
+        "test_loss": 0.09295069426298141,
+        "test_macro_nse": 0.5978851318359375,
+        "test_macro_mae": 0.20073232054710388,
+        "test_macro_rmse": 0.49132126569747925,
+        "test_nse_NH3N": 0.28444284200668335,
+        "test_nse_CODMn": 0.8293590545654297,
+        "test_nse_TP": 0.6798534393310547,
+        "test_mae_NH3N": 0.12344253808259964,
+        "test_mae_CODMn": 0.45989441871643066,
+        "test_mae_TP": 0.01885993592441082,
+        "test_rmse_NH3N": 0.32998180389404297,
+        "test_rmse_CODMn": 0.783393144607544,
+        "test_rmse_TP": 0.039962541311979294
+      },
+      "checkpoint": {
+        "path": "runs/china_real_daily_persistence_seed42/checkpoints/epoch=000-val_nse=0.2925.ckpt",
+        "sha256": "bf6c2bf403e3f5701384c7602f4fc4c4d35fbbd5e204fa5e9920dbf1c9b0d771"
+      }
+    },
+    "station_gru": {
+      "experiment": "china_real_daily_station_gru_seed42_rerun",
+      "validation": {
+        "val_macro_nse": 0.5632301568984985,
+        "val_macro_mae": 0.20866453647613525,
+        "val_macro_rmse": 0.4932391941547394,
+        "duration_s": 30.550211499998113,
+        "peak_vram_gb": 0.5887355804443359
+      },
+      "test": {
+        "test_loss": 0.07219022512435913,
+        "test_macro_nse": 0.7195862531661987,
+        "test_macro_mae": 0.190664604306221,
+        "test_macro_rmse": 0.42181071639060974,
+        "test_nse_NH3N": 0.5231821537017822,
+        "test_nse_CODMn": 0.8720871210098267,
+        "test_nse_TP": 0.7634894847869873,
+        "test_mae_NH3N": 0.11590418964624405,
+        "test_mae_CODMn": 0.43814927339553833,
+        "test_mae_TP": 0.017940351739525795,
+        "test_rmse_NH3N": 0.2693668007850647,
+        "test_rmse_CODMn": 0.6782584190368652,
+        "test_rmse_TP": 0.03434819355607033
+      },
+      "checkpoint": {
+        "path": "runs/china_real_daily_station_gru_seed42_rerun/checkpoints/epoch=006-val_nse=0.5632.ckpt",
+        "sha256": "cae93952b333442179a9c7f9a22ef86d793db0b111e00856d498f2474b841b59"
+      }
+    },
+    "static_gat": {
+      "experiment": "china_real_daily_static_gat_seed42",
+      "validation": {
+        "val_macro_nse": 0.5701722502708435,
+        "val_macro_mae": 0.20114682614803314,
+        "val_macro_rmse": 0.4835902750492096,
+        "duration_s": 316.80325319999974,
+        "peak_vram_gb": 0.5888118743896484
+      },
+      "test": {
+        "test_loss": 0.06854991614818573,
+        "test_macro_nse": 0.7335085272789001,
+        "test_macro_mae": 0.18427999317646027,
+        "test_macro_rmse": 0.4159448742866516,
+        "test_nse_NH3N": 0.5440298318862915,
+        "test_nse_CODMn": 0.8752796053886414,
+        "test_nse_TP": 0.781216025352478,
+        "test_mae_NH3N": 0.10737605392932892,
+        "test_mae_CODMn": 0.4285014271736145,
+        "test_mae_TP": 0.016962558031082153,
+        "test_rmse_NH3N": 0.2634122967720032,
+        "test_rmse_CODMn": 0.6697410345077515,
+        "test_rmse_TP": 0.033035922795534134
+      },
+      "checkpoint": {
+        "path": "runs/china_real_daily_static_gat_seed42/checkpoints/epoch=008-val_nse=0.5702.ckpt",
+        "sha256": "4016f6d4f0788a1e427b058fceb6046e2de2cbfecb10856d41b9dfada34f8edf"
+      }
+    },
+    "riverlagnet": {
+      "experiment": "china_real_daily_riverlagnet_seed42",
+      "validation": {
+        "val_macro_nse": 0.5781631469726562,
+        "val_macro_mae": 0.20606577396392822,
+        "val_macro_rmse": 0.49040284752845764,
+        "duration_s": 97.2202701999995,
+        "peak_vram_gb": 1.0421977043151855
+      },
+      "test": {
+        "test_loss": 0.07176844775676727,
+        "test_macro_nse": 0.7284015417098999,
+        "test_macro_mae": 0.19676466286182404,
+        "test_macro_rmse": 0.43542206287384033,
+        "test_nse_NH3N": 0.5497252941131592,
+        "test_nse_CODMn": 0.861216127872467,
+        "test_nse_TP": 0.7742631435394287,
+        "test_mae_NH3N": 0.11297924816608429,
+        "test_mae_CODMn": 0.45955926179885864,
+        "test_mae_TP": 0.017755473032593727,
+        "test_rmse_NH3N": 0.26176199316978455,
+        "test_rmse_CODMn": 0.70649254322052,
+        "test_rmse_TP": 0.033556751906871796
+      },
+      "checkpoint": {
+        "path": "runs/china_real_daily_riverlagnet_seed42/checkpoints/epoch=006-val_nse=0.5782.ckpt",
+        "sha256": "fa585dc8408cb8d88493f0dcb2e210c1d1e47460ced913efeec306d488695af3"
+      }
+    }
+  },
+  "validation_selected_model": "riverlagnet",
+  "descriptive_test_best_model": "static_gat",
+  "riverlagnet_test_macro_nse_deltas": {
+    "persistence": 0.1305164098739624,
+    "station_gru": 0.008815288543701172,
+    "static_gat": -0.005106985569000244
+  },
+  "crash_audit": [
+    {
+      "timestamp": "2026-07-13T16:51:15.676675+00:00",
+      "experiment": "china_real_daily_station_gru_seed42",
+      "description": "OSError: [Errno 22] Invalid argument"
+    }
+  ]
+}

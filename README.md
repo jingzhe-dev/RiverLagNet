@@ -78,6 +78,12 @@ conda run -n DeepWater python -m RiverLagNet.cli.evaluate checkpoint_path="runs/
 
 Hydra groups are in `configs/data`, `configs/model`, `configs/trainer`, and `configs/experiment`. Trainer precision defaults to `16-mixed` on GPU and automatically falls back to `32-true` on CPU.
 
+## Completed real daily seed-42 comparison
+
+The fixed real-data protocol completed Persistence, Station GRU, Static Directed GAT, and RiverLagNet training on commit `ba67183`. RiverLagNet had the highest validation macro NSE (`0.5782`) and was therefore the validation-selected model. Held-out test macro NSE was `0.5979`, `0.7196`, `0.7335`, and `0.7284`, respectively. The static directed graph was descriptively best on test by `0.0051`, so this single-seed run supports graph utility but does not establish a stable learned-lag advantage.
+
+Metrics, checkpoint hashes, physical-unit target errors, runtime/VRAM, the retained orchestration crash row, and limitations are generated from the append-only ledger and ignored run outputs in the [real training report](docs/real_training_report_2026-07-14.md) and [machine-readable summary](experiments/china_real_daily_seed42_summary.json).
+
 ## Completed synthetic comparison
 
 The seed-42 engineering comparison has been completed for all four required models with the same chronological synthetic split and training budget. Each full run automatically validates its best validation-macro-NSE checkpoint and appends one immutable row to `experiments/results.tsv`:
