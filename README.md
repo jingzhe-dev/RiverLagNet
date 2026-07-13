@@ -122,6 +122,14 @@ conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite id
 conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_fusion_v2 --summarize
 ```
 
+The five-seed fusion-v2 matrix also completed all 45 jobs without a crash. The
+local-state safety fix is retained, but the mechanism hypothesis was not
+supported: learned-lag minus `no_graph`, `shuffled_graph`, and `no_lag` macro
+NSE was `-0.0058`, `-0.0141`, and approximately `0.0000`, respectively. This
+isolates the remaining issue to lag/horizon alignment rather than unsafe local
+fusion. See the [fusion-v2 validation report](docs/identifiable_fusion_v2_report_2026-07-13.md)
+and machine-readable [summary](experiments/identifiable_fusion_v2_summary.json).
+
 ## Models and ablations
 
 The common training/evaluation path supports:
