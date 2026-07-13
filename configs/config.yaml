@@ -1,0 +1,16 @@
+defaults:
+  - data: synthetic
+  - model: riverlagnet
+  - trainer: default
+  - experiment: default
+  - _self_
+
+seed: 42
+run_dir: runs/${experiment.name}
+checkpoint_path: null
+
+hydra:
+  run:
+    dir: .
+  job:
+    chdir: false

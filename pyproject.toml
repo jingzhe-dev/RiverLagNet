@@ -28,4 +28,7 @@ testpaths = ["tests"]
 addopts = "--strict-markers"
 filterwarnings = [
   "ignore:`torch.jit.script` is deprecated.*:DeprecationWarning:torch.jit._script",
+  "ignore:GPU available but not used.*:UserWarning:lightning.pytorch.trainer.setup",
+  'ignore:`isinstance\(treespec, LeafSpec\)` is deprecated.*',
+  "ignore:The '.*_dataloader' does not have many workers.*:UserWarning:lightning.pytorch.trainer.connectors.data_connector",
 ]
