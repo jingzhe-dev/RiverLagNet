@@ -88,6 +88,8 @@ def run(cfg: DictConfig) -> dict[str, Any]:
         model,
         learning_rate=float(cfg.trainer.learning_rate),
         weight_decay=float(cfg.trainer.weight_decay),
+        target_mean=datamodule.scaler.mean[:3].tolist(),
+        target_scale=datamodule.scaler.scale[:3].tolist(),
     )
     run_dir = Path(str(cfg.run_dir))
     runtime = RuntimeStatsCallback()

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 
 from .dataset import RiverWindowDataset, river_collate
 from .normalization import MaskedStandardScaler
+from .real_daily import load_real_daily_dataset
 from .schema import TimeSeriesData
 from .synthetic import generate_synthetic_river_data
 from .synthetic_identifiable import (
@@ -29,7 +30,7 @@ class DataSpec:
 
 
 class RiverDataModule(LightningDataModule):
-    """Create deterministic 70/15/15 chronological river data splits."""
+    """Create deterministic 70/15/15 chronological synthetic or real splits."""
 
     def __init__(
         self,
@@ -44,10 +45,13 @@ class RiverDataModule(LightningDataModule):
         pin_memory: bool = False,
         seed: int = 42,
         scenario: str = "legacy",
+        dataset_path: str | None = None,
     ) -> None:
         super().__init__()
-        if scenario not in {"legacy", "identifiable_v1"}:
-            raise ValueError("scenario must be legacy or identifiable_v1")
+        if scenario not in {"legacy", "identifiable_v1", "real_daily"}:
+            raise ValueError("scenario must be legacy, identifiable_v1, or real_daily")
+        if scenario == "real_daily" and not dataset_path:
+            raise ValueError("dataset_path is required for scenario=real_daily")
         self.save_hyperparameters()
         self.data: TimeSeriesData | None = None
         self.synthetic_scenario: SyntheticScenario | None = None
@@ -61,7 +65,9 @@ class RiverDataModule(LightningDataModule):
     def setup(self, stage: str | None = None) -> None:
         """Generate data once, fit train-only statistics, and build split windows."""
         if self.data is None:
-            if self.hparams.scenario == "identifiable_v1":
+            if self.hparams.scenario == "real_daily":
+                self.data = load_real_daily_dataset(self.hparams.dataset_path)
+            elif self.hparams.scenario == "identifiable_v1":
                 self.synthetic_scenario = generate_identifiable_synthetic_scenario(
                     num_days=self.hparams.num_days,
                     num_nodes=self.hparams.num_nodes,
@@ -78,6 +84,9 @@ class RiverDataModule(LightningDataModule):
                     missing_rate=self.hparams.missing_rate,
                     seed=self.hparams.seed,
                 )
+            num_days = self.data.values.shape[0]
+            self.train_end = int(num_days * 0.70)
+            self.val_end = int(num_days * 0.85)
             self.scaler = MaskedStandardScaler().fit(
                 self.data.values[: self.train_end], self.data.observed[: self.train_end]
             )
@@ -102,7 +111,7 @@ class RiverDataModule(LightningDataModule):
             self.data,
             self.scaler,
             self.val_end,
-            self.hparams.num_days,
+            self.data.values.shape[0],
             self.hparams.input_window,
             self.hparams.output_window,
         )

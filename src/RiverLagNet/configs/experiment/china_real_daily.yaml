@@ -1,0 +1,5 @@
+name: china_real_daily_${model.name}_seed${seed}
+description: Real-source daily China observations; imputed values excluded by mask; one fixed seed.
+status: baseline
+record_result: true
+results_path: experiments/results.tsv

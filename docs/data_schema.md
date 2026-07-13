@@ -56,6 +56,26 @@ y_mask:        [B, T_out, N, 3]
 
 Forecast target timestamps define the chronological 70/15/15 splits. Every target window lies wholly inside one split and all inputs precede its first target. Validation/test inputs may use earlier history, but target timestamps never overlap across splits. Feature means and standard deviations are fitted from observed values before the training boundary only.
 
+## Prepared China real daily dataset
+
+`RiverLagNet.data.prepare_china_real_daily` converts the continuous China source into a reviewable long Parquet table and a compact NPZ tensor artifact. Graph nodes are monitored HydroRIVERS segments; the retained mapping table connects each node to one or more source monitoring stations. If several stations map to one segment, the daily node value is the mean of values whose source flag says they were not imputed.
+
+The generated artifact contains:
+
+```text
+values:                 [T,N,3] float32; zero only at masked positions
+observed:               [T,N,3] bool
+quality:                [T,N,3] fraction of mapped stations observed
+static:                 [N,S]
+edge_index:             [2,E] upstream -> downstream
+edge_attr:              [E,A]
+dates:                  [T] contiguous ISO dates
+node_ids:               [N] monitored segment IDs
+source_station_count:   [N]
+```
+
+Source values flagged `*_is_imputed=1` become null in `observations.parquet`, zero plus `observed=false` in `dataset.npz`, and never enter scaler fitting, loss, or metrics. The first edge features retain their source z-scores; the final feature is an explicit `travel_time_prior_days` derived from restored river length and the manifest-declared velocity assumption. This prior is a routing regularizer, not evidence of causality or measured travel time.
+
 ## Synthetic data
 
 `generate_synthetic_river_data` creates a deterministic directed tree with `source < destination`, edge travel-time priors, static station attributes, seasonal/autoregressive signals, lagged upstream influence, quality scores, and missing-observation masks. It is solely an engineering fixture, not an empirical dataset.

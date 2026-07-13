@@ -9,6 +9,9 @@ description = "Directed lag-aware river-network water-quality forecasting"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "numpy>=1.26",
+  "polars>=1.0",
+  "pyarrow>=15",
   "torch>=2.1",
   "torch-geometric>=2.4",
   "lightning>=2.2",

@@ -2,7 +2,7 @@
 
 RiverLagNet is a daily, multi-station water-quality forecasting system centered on **Directed Lag-aware River Message Passing**. It predicts `NH3N`, `CODMn`, and `TP` for the next 30 days from 90 historical days while preserving explicit upstream-to-downstream river direction and discrete travel lags.
 
-This repository validates the engineering and training loop with deterministic synthetic river data. A checksum-verified catalog of source-normalized HydroWQ China sample bundles can also be imported locally for data-interface and model-forward validation. It does not claim real-world predictive performance.
+The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment
 
@@ -28,6 +28,27 @@ conda run -n DeepWater python -m RiverLagNet.cli.import_hydrowq `
 The destination is Git-ignored. Every manifest asset is SHA-256 verified before and after copying; raw rasters, archives, caches, logs, and run outputs are excluded. The imported arrays were already normalized using the source project's training-basin statistics. Do not normalize them again.
 
 These samples have 45 history days and 46 forecast days, so they are intentionally not wired into the default 90-to-30 chronological experiment. `HydroWQChinaCatalog.compatibility()` exposes this mismatch explicitly. See the [import audit](docs/data/hydrowq-china-import-audit-2026-07-13.md) for provenance and quality results.
+
+## Prepare real daily observations
+
+The formal 90-to-30 experiment is prepared from the continuous China source and its per-value imputation flags. It combines the 10 verified monitored river components into one 36-node disjoint graph, aggregates only non-imputed source-station values, and writes ignored local assets under `data/processed/china-real-daily-v0.1`:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.prepare_real_data `
+  --dynamic-path "D:\05.Paper\06.第六篇论文\03.Code\数据填补\output\imputed_water_quality.csv" `
+  --flags-path "D:\05.Paper\06.第六篇论文\03.Code\数据填补\output\imputed_water_quality_flags.csv" `
+  --mapping-path "D:\05.Paper\07.第七篇论文\Code\data\processed\hydrowq-v0.1\china_bootstrap\station_mapping_hydrorivers.csv" `
+  --graph-root "data\processed\hydrowq-china-multibasin-v0.1\hydrowq-v0.1\fixtures\river_graph"
+```
+
+The generated manifest contains source and artifact SHA256 values, exact split dates, observation coverage, aggregation semantics, edge direction, and the travel-time prior assumption. See the [real-data audit](docs/data/china-real-daily-audit-2026-07-14.md).
+
+Run the fixed real-data training configurations with:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily model=station_gru trainer=formal_gpu experiment=china_real_daily
+conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily model=riverlagnet trainer=formal_gpu experiment=china_real_daily
+```
 
 ## Train
 

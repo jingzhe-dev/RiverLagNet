@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import torch
@@ -9,6 +10,7 @@ from lightning.pytorch import LightningModule
 from torch import Tensor, nn
 
 from RiverLagNet.data.datamodule import DataSpec
+from RiverLagNet.data.schema import TARGET_NAMES
 from RiverLagNet.models.baselines import PersistenceModel, StationGRU, StaticDirectedGAT
 from RiverLagNet.models.riverlag_net import RiverLagNet
 
@@ -64,9 +66,21 @@ class RiverForecastModule(LightningModule):
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         huber_delta: float = 1.0,
+        target_mean: Sequence[float] | None = None,
+        target_scale: Sequence[float] | None = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
+        if (target_mean is None) != (target_scale is None):
+            raise ValueError("target_mean and target_scale must be provided together")
+        mean = torch.zeros(len(TARGET_NAMES)) if target_mean is None else torch.tensor(target_mean)
+        scale = torch.ones(len(TARGET_NAMES)) if target_scale is None else torch.tensor(target_scale)
+        if mean.shape != (len(TARGET_NAMES),) or scale.shape != (len(TARGET_NAMES),):
+            raise ValueError("target normalization must contain exactly three values")
+        if torch.any(scale <= 0):
+            raise ValueError("target_scale must be positive")
+        self.register_buffer("target_mean", mean.to(torch.float32))
+        self.register_buffer("target_scale", scale.to(torch.float32))
         self.model = model
         self._dummy_parameter = (
             nn.Parameter(torch.zeros(()))
@@ -157,7 +171,9 @@ class RiverForecastModule(LightningModule):
         prediction = torch.cat([item[0] for item in outputs], dim=0)
         target = torch.cat([item[1] for item in outputs], dim=0)
         mask = torch.cat([item[2] for item in outputs], dim=0)
-        metrics = masked_metric_dict(prediction, target, mask)
+        metric_prediction = prediction * self.target_scale + self.target_mean
+        metric_target = target * self.target_scale + self.target_mean
+        metrics = masked_metric_dict(metric_prediction, metric_target, mask)
         for name, value in metrics.items():
             self.log(
                 f"{stage}_{name}",
