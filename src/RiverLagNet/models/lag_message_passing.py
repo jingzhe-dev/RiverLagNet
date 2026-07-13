@@ -117,9 +117,9 @@ class DirectedLagAwareMessagePassing(nn.Module):
 
         Returns upstream states `[B,T_out,N,D]` and routing weights
         `[B,T_out,E,max_lag+1]`. For lead day `h` and lag `tau`, the source
-        index is `t + h - tau`; candidates requiring future source values are
-        unavailable. Horizons beyond `max_lag` therefore receive no learned or
-        fixed-lag upstream message.
+        index is `t + h - tau`. When that index lies beyond the forecast
+        origin, the last observed source hidden state is used as a leakage-free
+        persistence proxy; the method never reads future observations.
         """
         if output_window <= 0:
             raise ValueError("output_window must be positive")
@@ -141,12 +141,12 @@ class DirectedLagAwareMessagePassing(nn.Module):
         lag_ids = torch.arange(lag_count, device=h_seq.device)
         lead_days = torch.arange(1, output_window + 1, device=h_seq.device)
         source_indices = history - 1 + lead_days[:, None] - lag_ids[None, :]
-        causal = (source_indices >= 0) & (source_indices < history)
+        has_history = source_indices >= 0
         source_indices = source_indices.clamp(0, history - 1)
         aligned = h_seq[:, source_indices].permute(0, 1, 3, 2, 4)
         source_states = aligned[:, :, source]
 
-        available = causal[:, None, :].expand(-1, edge_count, -1).clone()
+        available = has_history[:, None, :].expand(-1, edge_count, -1).clone()
         if self.lag_mode == "no_lag":
             source_states = h_seq[:, -1, source][:, None, :, None].expand(
                 -1, output_window, -1, lag_count, -1
@@ -173,19 +173,21 @@ class DirectedLagAwareMessagePassing(nn.Module):
             logits = logits + self._travel_time_prior(edge_attr, lag_ids)[None, None]
 
         attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
-        for horizon in range(output_window):
-            for node in destination.unique(sorted=True):
-                incoming = destination == node
-                candidates = available[horizon, incoming]
-                if not bool(candidates.any()):
-                    continue
-                node_logits = logits[:, horizon, incoming].masked_fill(
-                    ~candidates[None], -torch.inf
-                )
-                normalized = torch.softmax(node_logits.reshape(batch, -1).float(), dim=-1)
-                attention[:, horizon, incoming] = normalized.reshape(
-                    batch, int(incoming.sum()), lag_count
-                )
+        for node in destination.unique(sorted=True):
+            incoming = destination == node
+            incoming_count = int(incoming.sum())
+            candidates = available[:, incoming].reshape(output_window, -1)
+            node_logits = logits[:, :, incoming].reshape(batch, output_window, -1)
+            masked = node_logits.masked_fill(~candidates[None], -torch.inf)
+            has_candidate = candidates.any(dim=-1)
+            safe_logits = torch.where(
+                has_candidate[None, :, None], masked, torch.zeros_like(masked)
+            )
+            normalized = torch.softmax(safe_logits.float(), dim=-1)
+            normalized = normalized * candidates[None].to(normalized.dtype)
+            attention[:, :, incoming] = normalized.reshape(
+                batch, output_window, incoming_count, lag_count
+            )
 
         messages = self.message_projection(source_states)
         message_weights = self.dropout(attention).to(messages.dtype)

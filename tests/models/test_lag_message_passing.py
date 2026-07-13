@@ -63,7 +63,7 @@ def test_training_dropout_does_not_change_reported_attention_normalization() -> 
     assert torch.allclose(attention.sum(dim=(1, 2)), torch.ones(2), atol=1e-6)
 
 
-def test_fixed_lag_aligns_each_forecast_horizon_without_future_sources() -> None:
+def test_fixed_lag_uses_last_observed_proxy_when_aligned_source_is_future() -> None:
     module = DirectedLagAwareMessagePassing(1, edge_dim=1, max_lag=3, lag_mode="fixed_lag")
     _make_uniform(module)
     h_seq = torch.tensor(
@@ -80,11 +80,11 @@ def test_fixed_lag_aligns_each_forecast_horizon_without_future_sources() -> None
 
     assert upstream.shape == (1, 4, 2, 1)
     assert attention.shape == (1, 4, 1, 4)
-    assert torch.allclose(upstream[0, :, 1, 0], torch.tensor([3.0, 4.0, 0.0, 0.0]))
-    assert torch.allclose(attention[0, :, 0].sum(dim=-1), torch.tensor([1.0, 1.0, 0.0, 0.0]))
+    assert torch.allclose(upstream[0, :, 1, 0], torch.tensor([3.0, 4.0, 4.0, 4.0]))
+    assert torch.allclose(attention[0, :, 0].sum(dim=-1), torch.ones(4))
 
 
-def test_learned_horizon_attention_normalizes_only_over_observable_candidates() -> None:
+def test_learned_horizon_attention_normalizes_with_past_only_future_proxy() -> None:
     module = DirectedLagAwareMessagePassing(
         2,
         edge_dim=1,
@@ -102,9 +102,8 @@ def test_learned_horizon_attention_normalizes_only_over_observable_candidates() 
     assert upstream.shape == (2, 4, 3, 2)
     assert attention.shape == (2, 4, 2, 3)
     sums = attention.sum(dim=(2, 3))
-    assert torch.allclose(sums[:, :2], torch.ones(2, 2), atol=1e-6)
-    assert torch.equal(sums[:, 2:], torch.zeros(2, 2))
-    assert torch.equal(upstream[:, 2:], torch.zeros_like(upstream[:, 2:]))
+    assert torch.allclose(sums, torch.ones(2, 4), atol=1e-6)
+    assert torch.isfinite(upstream).all()
 
 
 def test_learned_horizon_attention_is_anchored_to_travel_time_prior() -> None:

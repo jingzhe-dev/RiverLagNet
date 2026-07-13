@@ -28,3 +28,24 @@ class MultiHorizonMultiTargetDecoder(nn.Module):
             raise ValueError("node_state must have shape [B,N,D] or [B,T_out,N,D]")
         decoded = self.shared(context)
         return torch.cat([head(decoded) for head in self.heads], dim=-1)
+
+
+class UpstreamResidualDecoder(nn.Module):
+    """Decode a horizon-specific upstream correction with exact zero fallback."""
+
+    def __init__(self, hidden_dim: int, target_dim: int = 3) -> None:
+        super().__init__()
+        self.shared = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim, bias=False),
+            nn.SiLU(),
+        )
+        self.heads = nn.ModuleList(
+            nn.Linear(hidden_dim, 1, bias=False) for _ in range(target_dim)
+        )
+
+    def forward(self, upstream_state: Tensor) -> Tensor:
+        """Return additive corrections `[B,T_out,N,target_dim]`."""
+        if upstream_state.ndim != 4:
+            raise ValueError("upstream_state must have shape [B,T_out,N,D]")
+        decoded = self.shared(upstream_state)
+        return torch.cat([head(decoded) for head in self.heads], dim=-1)

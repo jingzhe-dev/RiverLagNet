@@ -1,6 +1,6 @@
 import torch
 
-from RiverLagNet.models.decoder import MultiHorizonMultiTargetDecoder
+from RiverLagNet.models.decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
 from RiverLagNet.models.fusion import LocalUpstreamGatedFusion
 from RiverLagNet.models.input_encoder import InputMaskEncoder
 from RiverLagNet.models.temporal_gru import NodeTemporalGRU
@@ -30,6 +30,15 @@ def test_decoder_accepts_horizon_specific_node_states() -> None:
     output = decoder(torch.randn(2, 7, 5, 10))
 
     assert output.shape == (2, 7, 5, 3)
+
+
+def test_upstream_residual_decoder_is_exactly_zero_without_upstream_state() -> None:
+    decoder = UpstreamResidualDecoder(hidden_dim=10, target_dim=3)
+
+    output = decoder(torch.zeros(2, 7, 5, 10))
+
+    assert output.shape == (2, 7, 5, 3)
+    assert torch.equal(output, torch.zeros_like(output))
 
 
 def test_fusion_is_identity_when_no_upstream_message_exists() -> None:

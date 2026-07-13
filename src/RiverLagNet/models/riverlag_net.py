@@ -6,7 +6,7 @@ from torch import Tensor, nn
 
 from RiverLagNet.data.graph_builder import build_graph_variant
 
-from .decoder import MultiHorizonMultiTargetDecoder
+from .decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
 from .fusion import LocalUpstreamGatedFusion
 from .input_encoder import InputMaskEncoder
 from .lag_message_passing import DirectedLagAwareMessagePassing
@@ -53,6 +53,7 @@ class RiverLagNet(nn.Module):
         )
         self.fusion = LocalUpstreamGatedFusion(hidden_dim)
         self.decoder = MultiHorizonMultiTargetDecoder(hidden_dim, output_window, target_dim)
+        self.upstream_decoder = UpstreamResidualDecoder(hidden_dim, target_dim)
         self.attention_weights: Tensor | None = None
 
     def forward(
@@ -69,9 +70,10 @@ class RiverLagNet(nn.Module):
         encoded = self.input_encoder(x, x_mask, x_quality, static, time_features)
         h_seq, h_local = self.temporal_encoder(encoded)
         local_by_horizon = h_local[:, None].expand(-1, self.output_window, -1, -1)
+        local_prediction = self.decoder(local_by_horizon)
         if self.graph_variant == "no_graph":
             self.attention_weights = None
-            fused = local_by_horizon
+            return local_prediction
         else:
             variant_edges, variant_attr = build_graph_variant(
                 edge_index, edge_attr, self.graph_variant, self.graph_seed
@@ -85,4 +87,5 @@ class RiverLagNet(nn.Module):
             )
             self.attention_weights = attention
             fused = self.fusion(local_by_horizon, h_upstream)
-        return self.decoder(fused)
+        upstream_state = fused - local_by_horizon
+        return local_prediction + self.upstream_decoder(upstream_state)

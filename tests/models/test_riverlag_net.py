@@ -35,3 +35,33 @@ def test_riverlagnet_preserves_output_axes_for_graph_and_lag_ablations(
     else:
         assert model.attention_weights is not None
         assert model.attention_weights.shape[:2] == (2, 6)
+
+
+def test_riverlagnet_graph_path_equals_local_path_when_graph_is_empty() -> None:
+    torch.manual_seed(5)
+    model = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=3,
+        graph_variant="directed",
+        lag_mode="learned_lag",
+    ).eval()
+    inputs = {
+        "x": torch.randn(2, 8, 4, 3),
+        "x_mask": torch.ones(2, 8, 4, 3, dtype=torch.bool),
+        "x_quality": torch.ones(2, 8, 4, 3),
+        "static": torch.randn(4, 2),
+        "edge_index": torch.empty(2, 0, dtype=torch.long),
+        "edge_attr": torch.empty(0, 3),
+        "time_features": torch.randn(2, 8, 4),
+    }
+
+    graph_output = model(**inputs)
+    model.graph_variant = "no_graph"
+    local_output = model(**inputs)
+
+    assert torch.equal(graph_output, local_output)

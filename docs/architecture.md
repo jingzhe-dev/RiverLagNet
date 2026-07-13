@@ -37,17 +37,17 @@ For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:
 m_(i,h) = sum_(j in Up(i)) sum_(τ=h..max_lag) α_(ijhτ) W h_(j,t+h-τ)
 ```
 
-This horizon alignment prevents the model from using an unobserved future
-source: a lag is available for lead `h` only when `τ >= h`. Horizons beyond
-`max_lag` receive an exact zero upstream state and fall back to the local
-forecast. Scores use the destination local state, aligned source state,
-encoded edge attributes, and a learned lag embedding. Learned-lag scores add
-a configurable Gaussian log-prior centered on `travel_time_prior_days`; the
-neural score remains a trainable residual that can move probability away from
-the prior. Softmax is computed jointly over every incoming edge and available
-lag for each destination and horizon. Consequently, each non-empty candidate
-set sums to one. A node with no incoming edges receives an exact zero upstream
-state.
+This horizon alignment never reads an unobserved future source. When
+`t+h-τ <= t`, it selects the corresponding historical hidden state. When the
+aligned source time lies after the forecast origin, it carries forward the
+last observed source hidden state as a leakage-free latent forecast proxy.
+Scores use the destination local state, aligned source state, encoded edge
+attributes, and a learned lag embedding. Learned-lag scores add a configurable
+Gaussian log-prior centered on `travel_time_prior_days`; the neural score
+remains a trainable residual that can move probability away from the prior.
+Softmax is computed jointly over every incoming edge and available lag for
+each destination and horizon. Consequently, each candidate set sums to one. A
+node with no incoming edges receives an exact zero upstream state.
 
 `no_lag` is the static-graph ablation and repeats the latest source state at
 every horizon. `fixed_lag` selects the rounded and clipped
@@ -68,10 +68,20 @@ incoming message therefore returns `h_local` exactly instead of attenuating
 its local representation. This protects the local forecast while allowing a
 useful upstream correction to be learned.
 
-Fusion now receives horizon-specific local and upstream states. The decoder
-adds a learned embedding for each future horizon, applies a shared decoder,
-then uses three target-specific scalar heads. The output axes are never
-collapsed at the public interface.
+Fusion receives horizon-specific local and upstream states, but the fused
+increment is decoded through a separate bias-free upstream correction head.
+The main decoder always sees the untouched local state. The final prediction
+is therefore:
+
+```text
+y_hat = decoder_local(h_local) + decoder_upstream(z - h_local)
+```
+
+With no upstream state, both the hidden increment and output correction are
+exactly zero, so the graph path cannot perturb the local forecast. The local
+decoder adds a learned embedding for each future horizon, applies a shared
+decoder, then uses three target-specific scalar heads. The output axes are
+never collapsed at the public interface.
 
 ## Training
 
