@@ -9,3 +9,7 @@
 - 2026-07-13｜普通安装后 CLI 找不到 Hydra 根配置｜源码相对路径没有考虑 wheel 内模块位置｜增加 package-data 配置镜像及一致性测试，CLI 改用包内路径｜发布入口必须在非 editable 安装后执行 smoke test
 - 2026-07-13｜GPU `16-mixed` 下 attention 切片赋值发生 FP16/FP32 冲突｜CPU 测试未覆盖 softmax 在 autocast 中提升精度的行为｜增加 CUDA autocast 测试，attention 固定 FP32 并在消息乘法边界显式转换｜混合精度模型必须包含真实 CUDA 前向回归测试
 - 2026-07-13｜输入变量多于三个时目标标准化维度不匹配｜先裁目标通道再应用全特征 scaler｜增加额外动态变量测试并改为先标准化全特征再取前三个目标｜数据测试必须覆盖 `V>target_dim`
+- 2026-07-13｜内联 Python 中直接嵌入中文源路径后被 PowerShell 管道替换为问号｜跨进程脚本文本编码假设错误｜改用环境变量传递 Unicode 路径且脚本标准输入保持 ASCII｜含非 ASCII 的自动化路径统一通过参数或环境变量传递
+- 2026-07-13｜数据清单检查用 `Path.read_text()` 默认 GBK 解码 UTF-8 JSON 失败｜遗漏显式文件编码｜改为 `read_text(encoding="utf-8")` 并完成检查｜所有项目 JSON 和 Markdown 读写显式声明 UTF-8
+- 2026-07-13｜假设 `conda` 已在 PATH 并用递归搜索定位导致一次超时｜未先读取 Conda 环境注册文件｜从 `.conda/environments.txt` 确认安装位置并使用绝对解释器路径｜Windows 环境发现优先读取注册配置而非递归扫描用户目录
+- 2026-07-13｜新导入 CLI 被旧的普通安装遮蔽而首次运行失败｜修改源码后未考虑非 editable 安装不会即时更新｜用当前仓库 `src` 设置 `PYTHONPATH` 后重跑成功｜源码 smoke 在普通安装模式下先重装，或显式绑定当前 `src`

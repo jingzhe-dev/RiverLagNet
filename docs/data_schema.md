@@ -59,3 +59,24 @@ Forecast target timestamps define the chronological 70/15/15 splits. Every targe
 ## Synthetic data
 
 `generate_synthetic_river_data` creates a deterministic directed tree with `source < destination`, edge travel-time priors, static station attributes, seasonal/autoregressive signals, lagged upstream influence, quality scores, and missing-observation masks. It is solely an engineering fixture, not an empirical dataset.
+
+## Imported HydroWQ China sample bundles
+
+`RiverLagNet.data.HydroWQChinaCatalog` reads the locally imported `hydrowq-china-multibasin-v0.1` manifest. It preserves graph edges exactly as stored (`edge_index[0]` upstream, `edge_index[1]` downstream) and selects/reorders water-quality channels to the fixed RiverLagNet order:
+
+```text
+source:      ..., CODMn, NH3N, TP, ...
+RiverLagNet: NH3N, CODMn, TP
+```
+
+The returned sample tensors are:
+
+```text
+x:         [45, N, 3]
+x_mask:    [45, N, 3] bool
+x_quality: [45, N, 3] optional source quality codes
+y:         [46, N, 3]
+y_mask:    [46, N, 3] bool
+```
+
+These values are already source-normalized from training-basin statistics. The source manifest uses basin holdouts and one 91-day window per sampled year, rather than RiverLagNet's required chronological 70/15/15 split. Consequently, the catalog is currently an adapter for interface checks and controlled follow-up experiments, not a replacement for the default 90-history/30-forecast training dataset.
