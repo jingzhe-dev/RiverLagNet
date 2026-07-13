@@ -10,6 +10,7 @@ from RiverLagNet.analysis.experiment_suite import (
     IDENTIFIABLE_FUSION_V2,
     IDENTIFIABLE_HORIZON_V5,
     IDENTIFIABLE_V1,
+    REAL_LAG_V1,
     ROBUSTNESS_V1,
     build_experiment_specs,
     evaluation_command,
@@ -198,6 +199,27 @@ def test_horizon_routing_preset_has_frozen_names_and_outputs() -> None:
     assert specs[0].experiment_name == "ident_horizon_v5_s42_persistence"
     assert "data=synthetic_identifiable_v1" in training_command(specs[0], "python")
     assert IDENTIFIABLE_HORIZON_V5.summary_json.name == "identifiable_horizon_v5_summary.json"
+
+
+def test_real_lag_preset_limits_matrix_and_uses_formal_real_data_config() -> None:
+    specs = build_experiment_specs([42, 43], REAL_LAG_V1)
+
+    assert len(specs) == 6
+    assert {spec.condition.name for spec in specs} == {
+        "no_lag",
+        "fixed_lag",
+        "learned_lag",
+    }
+    command = training_command(specs[0], "python")
+    assert "data=china_real_daily" in command
+    assert "trainer=formal_gpu" in command
+    assert "experiment=china_real_daily" in command
+    assert any(value.startswith("experiment.description=Real-source") for value in command)
+    learned = next(spec for spec in specs if spec.condition.name == "learned_lag")
+    checkpoint = learned.run_dir / "checkpoints" / "best.ckpt"
+    evaluation = evaluation_command(learned, checkpoint, "python")
+    assert "data=china_real_daily" in evaluation
+    assert "trainer=formal_gpu" in evaluation
 
 
 @pytest.mark.parametrize(

@@ -30,6 +30,10 @@ class SuitePreset:
     summary_markdown: Path
     report_title: str
     primary_comparisons: tuple[str, ...]
+    condition_names: tuple[str, ...] | None = None
+    trainer_override: str | None = None
+    experiment_override: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -122,6 +126,22 @@ IDENTIFIABLE_HORIZON_V5 = SuitePreset(
     report_title="RiverLagNet horizon-aligned routing benchmark report",
     primary_comparisons=("no_graph", "shuffled_graph", "no_lag"),
 )
+REAL_LAG_V1 = SuitePreset(
+    name="real_lag_v1",
+    experiment_prefix="real_lag_v1",
+    data_override="china_real_daily",
+    summary_json=Path("experiments/china_real_daily_lag_ablation_summary.json"),
+    summary_markdown=Path("docs/china_real_daily_lag_ablation_report_2026-07-14.md"),
+    report_title="RiverLagNet real daily multi-seed lag ablation report",
+    primary_comparisons=("no_lag", "fixed_lag"),
+    condition_names=("no_lag", "fixed_lag", "learned_lag"),
+    trainer_override="formal_gpu",
+    experiment_override="china_real_daily",
+    description=(
+        "Real-source daily China observations with imputed values masked in a "
+        "paired five-seed lag ablation."
+    ),
+)
 SUITE_PRESETS = {
     preset.name: preset
     for preset in (
@@ -129,6 +149,7 @@ SUITE_PRESETS = {
         IDENTIFIABLE_V1,
         IDENTIFIABLE_FUSION_V2,
         IDENTIFIABLE_HORIZON_V5,
+        REAL_LAG_V1,
     )
 }
 
@@ -140,9 +161,16 @@ def build_experiment_specs(
     normalized = tuple(int(seed) for seed in seeds)
     if len(set(normalized)) != len(normalized):
         raise ValueError("suite seeds must be unique")
+    condition_names = preset.condition_names or CONDITION_NAMES
+    unknown = sorted(set(condition_names) - set(CONDITION_NAMES))
+    if unknown:
+        raise ValueError(f"unknown suite conditions: {', '.join(unknown)}")
+    selected_conditions = tuple(
+        condition for condition in CONDITIONS if condition.name in condition_names
+    )
     specs: list[ExperimentSpec] = []
     for seed in normalized:
-        for condition in CONDITIONS:
+        for condition in selected_conditions:
             name = f"{preset.experiment_prefix}_s{seed}_{condition.name}"
             specs.append(
                 ExperimentSpec(
@@ -189,6 +217,10 @@ def training_command(spec: ExperimentSpec, python_executable: str) -> list[str]:
     ]
     if spec.preset.data_override is not None:
         command.append(f"data={spec.preset.data_override}")
+    if spec.preset.trainer_override is not None:
+        command.append(f"trainer={spec.preset.trainer_override}")
+    if spec.preset.experiment_override is not None:
+        command.append(f"experiment={spec.preset.experiment_override}")
     command.extend(
         [
         f"model={spec.condition.model}",
@@ -199,6 +231,8 @@ def training_command(spec: ExperimentSpec, python_executable: str) -> list[str]:
         *spec.condition.model_overrides,
         ]
     )
+    if spec.preset.description is not None:
+        command.append(f"experiment.description={spec.preset.description}")
     return command
 
 
@@ -233,6 +267,8 @@ def evaluation_command(
     ]
     if spec.preset.data_override is not None:
         command.append(f"data={spec.preset.data_override}")
+    if spec.preset.trainer_override is not None:
+        command.append(f"trainer={spec.preset.trainer_override}")
     command.extend(
         [
         "model=riverlagnet",

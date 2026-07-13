@@ -168,17 +168,32 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
     deltas = summary["paired_deltas"]
     assert isinstance(seeds, list) and isinstance(conditions, dict) and isinstance(deltas, dict)
     identifiable = str(summary["suite"]).startswith("identifiable_")
+    real_world = str(summary["suite"]).startswith("real_")
+    if identifiable:
+        evidence_note = (
+            "This report is generated from validation-selected checkpoints in the "
+            "append-only experiment ledger. It tests an identifiable synthetic benchmark; "
+            "it is not a real-world water-quality result or a formal significance test."
+        )
+    elif real_world:
+        evidence_note = (
+            "This report is generated from validation-selected checkpoints trained on "
+            "real-source daily China observations. Imputed values are excluded by masks; "
+            "the five-seed comparison quantifies training variability but is not a formal "
+            "significance test."
+        )
+    else:
+        evidence_note = (
+            "This report is generated from validation-selected checkpoints in the "
+            "append-only experiment ledger. It tests engineering robustness on synthetic "
+            "data; it is not a real-world water-quality result or a formal significance test."
+        )
     lines = [
         f"# {summary['report_title']}",
         "",
         "## Technical summary",
         "",
-        (
-            "This report is generated from validation-selected checkpoints in the append-only experiment ledger. "
-            "It tests an identifiable synthetic benchmark; it is not a real-world water-quality result or a formal significance test."
-            if identifiable
-            else "This report is generated from validation-selected checkpoints in the append-only experiment ledger. It tests engineering robustness on synthetic data; it is not a real-world water-quality result or a formal significance test."
-        ),
+        evidence_note,
         "",
         "## Scope and evidence",
         "",
@@ -241,7 +256,7 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
                 "",
                 "## Held-out test results",
                 "",
-                "These metrics summarize only the five full learned-lag checkpoints after all validation comparisons were fixed.",
+                f"These metrics summarize only the {len(seeds)} full learned-lag checkpoints after all validation comparisons were fixed.",
                 "",
                 "| Metric | Runs | Mean ± SD | Min | Max |",
                 "|---|---:|---:|---:|---:|",

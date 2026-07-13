@@ -269,3 +269,26 @@ def test_horizon_routing_summary_keeps_primary_decision_contract(tmp_path: Path)
     assert summary["suite"] == "identifiable_horizon_v5"
     assert set(summary["paired_deltas"]) == {"no_graph", "shuffled_graph", "no_lag"}
     assert "identifiable synthetic benchmark" in markdown.lower()
+
+
+def test_real_lag_summary_reports_real_evidence_and_only_lag_deltas(
+    tmp_path: Path,
+) -> None:
+    from RiverLagNet.analysis.experiment_suite import REAL_LAG_V1
+
+    ledger = tmp_path / "results.tsv"
+    specs = build_experiment_specs([42, 43], REAL_LAG_V1)
+    offsets = {"no_lag": 0.65, "fixed_lag": 0.67, "learned_lag": 0.70}
+    for spec in specs:
+        append_experiment_record(
+            ledger,
+            _record(spec.experiment_name, spec.seed, offsets[spec.condition.name]),
+        )
+
+    summary = summarize_validation(load_successful_suite_rows(ledger, specs), specs)
+    markdown = render_validation_markdown(summary)
+
+    assert summary["suite"] == "real_lag_v1"
+    assert set(summary["paired_deltas"]) == {"no_lag", "fixed_lag"}
+    assert "real-source daily China observations" in markdown
+    assert "not a formal significance test" in markdown

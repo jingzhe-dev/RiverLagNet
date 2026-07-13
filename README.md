@@ -84,6 +84,15 @@ The fixed real-data protocol completed Persistence, Station GRU, Static Directed
 
 Metrics, checkpoint hashes, physical-unit target errors, runtime/VRAM, the retained orchestration crash row, and limitations are generated from the append-only ledger and ignored run outputs in the [real training report](docs/real_training_report_2026-07-14.md) and [machine-readable summary](experiments/china_real_daily_seed42_summary.json).
 
+The paired real-data lag suite runs `no_lag`, `fixed_lag`, and `learned_lag` under the same formal GPU budget for seeds 42--46. It is resumable from successful ledger rows, and held-out test evaluation remains restricted to the full learned-lag checkpoints after validation comparisons are fixed:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_lag_v1
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_lag_v1 --summarize
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_lag_v1 --evaluate-final
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_lag_v1 --summarize
+```
+
 ## Completed synthetic comparison
 
 The seed-42 engineering comparison has been completed for all four required models with the same chronological synthetic split and training budget. Each full run automatically validates its best validation-macro-NSE checkpoint and appends one immutable row to `experiments/results.tsv`:

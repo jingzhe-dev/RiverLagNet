@@ -37,3 +37,4 @@
 - 2026-07-14｜Station GRU 正式训练被 1 秒工具超时关闭输出管道并写入 crash 行｜把工具让出控制误当成进程硬超时｜保留不可篡改 crash 行并以新实验名、完整超时重跑成功｜长训练使用可等待执行单元且禁止短硬超时
 - 2026-07-14｜Station GRU 重跑描述中的分号被 Hydra override 语法拒绝｜把自然语言直接放入未转义 override｜删除非必要描述 override 后按原科学配置成功运行｜Hydra 自由文本使用配置文件或先验证引号转义
 - 2026-07-14｜首次 held-out 评估路径含 `=` 被 Hydra 解析器拒绝｜PowerShell 引号未作为 Hydra 值的一部分保留｜在忽略目录复制同一 checkpoint 为 `best.ckpt` 后完成四模型评估｜CLI 评估统一使用不含 Hydra 特殊字符的 checkpoint 别名
+- 2026-07-14｜新增真实消融套件首次 dry run 仍加载旧安装而拒绝 `real_lag_v1`｜修改源码后未先确认 `DeepWater` 中包的安装模式｜将当前仓库重新安装为 editable 并成功完成 dry run 与三种消融 smoke｜每次新增 CLI 能力后先核对 `RiverLagNet.__file__` 指向当前工作树
