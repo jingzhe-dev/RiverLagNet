@@ -57,6 +57,19 @@ conda run -n DeepWater python -m RiverLagNet.cli.evaluate checkpoint_path="runs/
 
 Hydra groups are in `configs/data`, `configs/model`, `configs/trainer`, and `configs/experiment`. Trainer precision defaults to `16-mixed` on GPU and automatically falls back to `32-true` on CPU.
 
+## Completed synthetic comparison
+
+The seed-42 engineering comparison has been completed for all four required models with the same chronological synthetic split and training budget. Each full run automatically validates its best validation-macro-NSE checkpoint and appends one immutable row to `experiments/results.tsv`:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.train model=persistence experiment.name=synthetic_seed42_persistence run_dir=runs/synthetic_seed42_persistence trainer.enable_progress_bar=false
+conda run -n DeepWater python -m RiverLagNet.cli.train model=station_gru experiment.name=synthetic_seed42_station_gru run_dir=runs/synthetic_seed42_station_gru trainer.enable_progress_bar=false
+conda run -n DeepWater python -m RiverLagNet.cli.train model=static_gat experiment.name=synthetic_seed42_static_gat run_dir=runs/synthetic_seed42_static_gat trainer.enable_progress_bar=false
+conda run -n DeepWater python -m RiverLagNet.cli.train model=riverlagnet experiment.name=synthetic_seed42_riverlagnet run_dir=runs/synthetic_seed42_riverlagnet trainer.enable_progress_bar=false
+```
+
+RiverLagNet achieved validation/test macro NSE of `0.6697/0.6283` in this single-seed synthetic run. Checkpoints and full logs remain under ignored `runs/` directories. See the [complete training report](docs/training_run_2026-07-13.md) for all metrics and limitations; these values are not empirical water-quality results.
+
 ## Models and ablations
 
 The common training/evaluation path supports:
