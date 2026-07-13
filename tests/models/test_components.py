@@ -1,6 +1,7 @@
 import torch
 
 from RiverLagNet.models.decoder import MultiHorizonMultiTargetDecoder
+from RiverLagNet.models.fusion import LocalUpstreamGatedFusion
 from RiverLagNet.models.input_encoder import InputMaskEncoder
 from RiverLagNet.models.temporal_gru import NodeTemporalGRU
 
@@ -21,3 +22,29 @@ def test_decoder_keeps_horizon_node_and_target_dimensions() -> None:
     decoder = MultiHorizonMultiTargetDecoder(hidden_dim=10, output_window=7, target_dim=3)
     output = decoder(torch.randn(2, 5, 10))
     assert output.shape == (2, 7, 5, 3)
+
+
+def test_fusion_is_identity_when_no_upstream_message_exists() -> None:
+    fusion = LocalUpstreamGatedFusion(hidden_dim=8)
+    local = torch.randn(2, 5, 8)
+
+    fused = fusion(local, torch.zeros_like(local))
+
+    assert torch.equal(fused, local)
+
+
+def test_fusion_starts_as_a_small_upstream_residual_with_gradient_flow() -> None:
+    torch.manual_seed(7)
+    fusion = LocalUpstreamGatedFusion(hidden_dim=8)
+    local = torch.randn(2, 5, 8, requires_grad=True)
+    upstream = torch.randn(2, 5, 8, requires_grad=True)
+
+    fused = fusion(local, upstream)
+    residual_ratio = (fused - local).norm() / upstream.norm()
+    fused.square().mean().backward()
+
+    assert residual_ratio < 0.1
+    assert upstream.grad is not None
+    assert upstream.grad.abs().sum() > 0
+    assert fusion.gate.weight.grad is not None
+    assert fusion.gate.weight.grad.abs().sum() > 0

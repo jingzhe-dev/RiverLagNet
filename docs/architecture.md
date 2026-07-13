@@ -43,11 +43,16 @@ Scores use the destination local state, source lagged state, encoded edge attrib
 
 ## Fusion and decoding
 
-The fusion equation is:
+The fusion equation is implemented as an identity-safe upstream residual:
 
 ```text
-z = gate * h_local + (1 - gate) * h_upstream
+z = h_local + sigmoid(gate([h_local, h_upstream])) * W_upstream h_upstream
 ```
+
+The gate starts near zero, and `W_upstream` has no bias. A node with no
+incoming message therefore returns `h_local` exactly instead of attenuating
+its local representation. This protects the local forecast while allowing a
+useful upstream correction to be learned.
 
 The decoder adds a learned embedding for each future horizon to every node state, applies a shared decoder, then uses three target-specific scalar heads. The output axes are never collapsed at the public interface.
 
