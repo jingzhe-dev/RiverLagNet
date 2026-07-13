@@ -237,6 +237,30 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
             f"{values['std_delta_macro_nse']:.4f} | {values['wins']}/{len(seeds)} | "
             f"{'yes' if supported else 'no'} |"
         )
+    if real_world:
+        no_lag = deltas["no_lag"]
+        fixed_lag = deltas["fixed_lag"]
+        lines.extend(
+            [
+                "",
+                "## Validation decision",
+                "",
+                (
+                    "The learned-lag model does not beat `no_lag` under the predeclared "
+                    f"rule: its paired mean macro-NSE delta is "
+                    f"{no_lag['mean_delta_macro_nse']:.4f}, with wins in "
+                    f"{no_lag['wins']}/{len(seeds)} seeds."
+                ),
+                "",
+                (
+                    "It is directionally above `fixed_lag`, but only by "
+                    f"{fixed_lag['mean_delta_macro_nse']:.4f} macro NSE with wins in "
+                    f"{fixed_lag['wins']}/{len(seeds)} seeds. Because `no_lag` is stronger "
+                    "on average and both effect sizes are small, these results do not "
+                    "establish a stable learned propagation-time advantage on this dataset."
+                ),
+            ]
+        )
     if identifiable:
         lines.extend(
             [

@@ -93,6 +93,8 @@ conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite re
 conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_lag_v1 --summarize
 ```
 
+All 15 paired jobs completed successfully on commit `e9623e1`. Validation macro NSE was `0.5755 ± 0.0038` for `no_lag`, `0.5738 ± 0.0043` for `fixed_lag`, and `0.5744 ± 0.0039` for `learned_lag`. Learned lag lost to no lag by `0.0010` on average and won only 1/5 seeds; it exceeded fixed lag by `0.0006` and won 3/5. The five learned-lag checkpoints achieved held-out test macro NSE `0.7215 ± 0.0065`. This supports stable predictive skill for the full model but does not establish a learned-lag advantage over the no-lag directed graph. See the [real daily lag ablation report](docs/china_real_daily_lag_ablation_report_2026-07-14.md) and [machine-readable summary](experiments/china_real_daily_lag_ablation_summary.json).
+
 ## Completed synthetic comparison
 
 The seed-42 engineering comparison has been completed for all four required models with the same chronological synthetic split and training budget. Each full run automatically validates its best validation-macro-NSE checkpoint and appends one immutable row to `experiments/results.tsv`:

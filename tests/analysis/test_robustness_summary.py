@@ -292,3 +292,5 @@ def test_real_lag_summary_reports_real_evidence_and_only_lag_deltas(
     assert set(summary["paired_deltas"]) == {"no_lag", "fixed_lag"}
     assert "real-source daily China observations" in markdown
     assert "not a formal significance test" in markdown
+    assert "does not beat `no_lag`" in markdown
+    assert "do not establish a stable learned propagation-time advantage" in markdown
