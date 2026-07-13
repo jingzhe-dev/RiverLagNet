@@ -201,5 +201,10 @@
         "max": 0.774685263633728
       }
     }
+  },
+  "visualization": {
+    "png": "docs/figures/china_real_daily_lag_ablation_summary.png",
+    "pdf": "docs/figures/china_real_daily_lag_ablation_summary.pdf",
+    "markdown_png": "figures/china_real_daily_lag_ablation_summary.png"
   }
 }

@@ -4,6 +4,10 @@
 
 This report is generated from validation-selected checkpoints trained on real-source daily China observations. Imputed values are excluded by masks; the five-seed comparison quantifies training variability but is not a formal significance test.
 
+## Result visualization
+
+![Experiment result summary](figures/china_real_daily_lag_ablation_summary.png)
+
 ## Scope and evidence
 
 - Seeds: 42, 43, 44, 45, 46

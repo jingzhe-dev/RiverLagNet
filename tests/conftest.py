@@ -14,6 +14,14 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from RiverLagNet.testing.cleanup import clean_test_artifacts
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Remove pytest caches, bytecode, and temporary files after every test session."""
+    clean_test_artifacts(ROOT)
+
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()

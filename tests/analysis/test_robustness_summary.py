@@ -105,6 +105,15 @@ def test_summary_outputs_json_and_decision_ready_markdown(tmp_path: Path) -> Non
     assert "synthetic" in markdown.lower()
     assert render_validation_markdown(summary) == markdown
 
+    summary["visualization"] = {
+        "png": "docs/figures/summary.png",
+        "pdf": "docs/figures/summary.pdf",
+        "markdown_png": "figures/summary.png",
+    }
+    visual_markdown = render_validation_markdown(summary)
+    assert "## Result visualization" in visual_markdown
+    assert "![Experiment result summary](figures/summary.png)" in visual_markdown
+
 
 def test_load_successful_suite_rows_rejects_missing_or_duplicate_success(
     tmp_path: Path,

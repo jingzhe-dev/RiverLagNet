@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -24,6 +25,7 @@ from RiverLagNet.analysis.robustness_summary import (
     summarize_validation,
     write_validation_summary,
 )
+from RiverLagNet.analysis.result_visualization import render_experiment_summary_figure
 from RiverLagNet.analysis.synthetic_identifiability import (
     run_identifiability_gate,
     write_identifiability_gate,
@@ -51,6 +53,8 @@ def run(argv: Sequence[str] | None = None) -> None:
         type=Path,
         default=None,
     )
+    parser.add_argument("--figure-png", type=Path, default=None)
+    parser.add_argument("--figure-pdf", type=Path, default=None)
     args = parser.parse_args(argv)
 
     preset = SUITE_PRESETS[args.suite]
@@ -67,8 +71,22 @@ def run(argv: Sequence[str] | None = None) -> None:
             raise ValueError("held-out test outputs are incomplete")
         if existing:
             summary["test"] = aggregate_test_metrics(existing)
+        figure_stem = summary_json.stem
+        figure_png = args.figure_png or Path("docs/figures") / f"{figure_stem}.png"
+        figure_pdf = args.figure_pdf or Path("docs/figures") / f"{figure_stem}.pdf"
+        summary["visualization"] = {
+            "png": figure_png.as_posix(),
+            "pdf": figure_pdf.as_posix(),
+            "markdown_png": Path(
+                os.path.relpath(figure_png, start=summary_markdown.parent)
+            ).as_posix(),
+        }
+        render_experiment_summary_figure(summary, figure_png, figure_pdf)
         write_validation_summary(summary, summary_json, summary_markdown)
-        print(f"summary_json={summary_json} summary_markdown={summary_markdown}")
+        print(
+            f"summary_json={summary_json} summary_markdown={summary_markdown} "
+            f"figure_png={figure_png} figure_pdf={figure_pdf}"
+        )
         return
     if args.evaluate_final:
         load_successful_suite_rows(args.ledger, specs)

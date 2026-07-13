@@ -188,6 +188,17 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
             "append-only experiment ledger. It tests engineering robustness on synthetic "
             "data; it is not a real-world water-quality result or a formal significance test."
         )
+    visualization = summary.get("visualization")
+    visualization_lines: list[str] = []
+    if isinstance(visualization, Mapping):
+        markdown_png = visualization.get("markdown_png")
+        if isinstance(markdown_png, str) and markdown_png:
+            visualization_lines = [
+                "## Result visualization",
+                "",
+                f"![Experiment result summary]({markdown_png})",
+                "",
+            ]
     lines = [
         f"# {summary['report_title']}",
         "",
@@ -195,6 +206,7 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
         "",
         evidence_note,
         "",
+        *visualization_lines,
         "## Scope and evidence",
         "",
         f"- Seeds: {', '.join(str(seed) for seed in seeds)}",

@@ -13,6 +13,8 @@ conda run -n DeepWater python -m pip install .
 conda run -n DeepWater python -m pytest -q
 ```
 
+Pytest stores temporary files under `build/pytest` and removes them, `.pytest_cache`, and repository-local `__pycache__` directories when the session ends. Test source files are never deleted. Manual smoke outputs can be removed safely with `python -m RiverLagNet.cli.cleanup_test_artifacts`.
+
 On Windows checkouts whose path contains non-ASCII characters, use a regular installation (`pip install .`) rather than editable installation because Python 3.10 may read editable `.pth` files with the system code page.
 
 ## Import reusable HydroWQ China assets
@@ -61,7 +63,8 @@ conda run -n DeepWater python -m RiverLagNet.cli.train
 One-batch synthetic validation:
 
 ```powershell
-conda run -n DeepWater python -m RiverLagNet.cli.train trainer.fast_dev_run=true data=synthetic
+conda run -n DeepWater python -m RiverLagNet.cli.train trainer.fast_dev_run=true data=synthetic run_dir=build/smoke/synthetic experiment.record_result=false
+conda run -n DeepWater python -m RiverLagNet.cli.cleanup_test_artifacts
 ```
 
 Station GRU baseline:
@@ -93,7 +96,9 @@ conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite re
 conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_lag_v1 --summarize
 ```
 
-All 15 paired jobs completed successfully on commit `e9623e1`. Validation macro NSE was `0.5755 ± 0.0038` for `no_lag`, `0.5738 ± 0.0043` for `fixed_lag`, and `0.5744 ± 0.0039` for `learned_lag`. Learned lag lost to no lag by `0.0010` on average and won only 1/5 seeds; it exceeded fixed lag by `0.0006` and won 3/5. The five learned-lag checkpoints achieved held-out test macro NSE `0.7215 ± 0.0065`. This supports stable predictive skill for the full model but does not establish a learned-lag advantage over the no-lag directed graph. See the [real daily lag ablation report](docs/china_real_daily_lag_ablation_report_2026-07-14.md) and [machine-readable summary](experiments/china_real_daily_lag_ablation_summary.json).
+All 15 paired jobs completed successfully on commit `e9623e1`. Validation macro NSE was `0.5755 ± 0.0038` for `no_lag`, `0.5738 ± 0.0043` for `fixed_lag`, and `0.5744 ± 0.0039` for `learned_lag`. Learned lag lost to no lag by `0.0010` on average and won only 1/5 seeds; it exceeded fixed lag by `0.0006` and won 3/5. The five learned-lag checkpoints achieved held-out test macro NSE `0.7215 ± 0.0065`. This supports stable predictive skill for the full model but does not establish a learned-lag advantage over the no-lag directed graph. Every suite summary now regenerates PNG and PDF figures directly from the machine-readable metrics. See the [real daily lag ablation report](docs/china_real_daily_lag_ablation_report_2026-07-14.md), [machine-readable summary](experiments/china_real_daily_lag_ablation_summary.json), and [vector figure](docs/figures/china_real_daily_lag_ablation_summary.pdf).
+
+![Real daily lag ablation results](docs/figures/china_real_daily_lag_ablation_summary.png)
 
 ## Completed synthetic comparison
 
