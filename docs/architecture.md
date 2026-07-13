@@ -90,3 +90,9 @@ never collapsed at the public interface.
 CSV and TensorBoard loggers, learning-rate monitoring, checkpointing, early stopping, gradient clipping, deterministic seeds, timing, peak CUDA memory, CPU fallback, and `fast_dev_run` are configured through Lightning and Hydra.
 
 Attention weights indicate learned routing preference only. They are not causal effect estimates.
+
+The `shuffled_graph` ablation samples a deterministic directed null graph with
+the same node set and edge count, while excluding self-loops and every true
+edge. Edge attributes retain their empirical distribution but are detached
+from the true topology. This makes the structural control disjoint instead of
+silently preserving part of the causal graph.
