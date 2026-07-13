@@ -122,6 +122,25 @@ def test_dry_run_returns_commands_without_invoking_subprocess(
     assert all(command[0] == "python" for command in commands)
 
 
+def test_runner_does_not_force_utf8_mode_for_unicode_editable_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    specs = build_experiment_specs([42])[:1]
+    environments: list[dict[str, str]] = []
+
+    def capture_run(command, check, env):
+        environments.append(env)
+
+    monkeypatch.setenv("PYTHONUTF8", "1")
+    monkeypatch.setattr("subprocess.run", capture_run)
+
+    run_experiment_specs(specs, python_executable="python")
+
+    assert len(environments) == 1
+    assert "PYTHONUTF8" not in environments[0]
+    assert environments[0]["PYTHONIOENCODING"] == "utf-8"
+
+
 def test_final_evaluation_command_uses_only_selected_learned_lag_checkpoint(
     tmp_path: Path,
 ) -> None:

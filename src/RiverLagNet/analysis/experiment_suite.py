@@ -291,7 +291,8 @@ def run_experiment_specs(
     commands = [training_command(spec, python_executable) for spec in specs]
     if dry_run:
         return commands
-    environment = {**os.environ, "PYTHONUTF8": "1"}
+    environment = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    environment.pop("PYTHONUTF8", None)
     for command in commands:
         subprocess.run(command, check=True, env=environment)
     return commands
@@ -310,7 +311,8 @@ def run_final_evaluations(
     ]
     if dry_run:
         return commands
-    environment = {**os.environ, "PYTHONUTF8": "1"}
+    environment = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    environment.pop("PYTHONUTF8", None)
     for command in commands:
         subprocess.run(command, check=True, env=environment)
     return commands

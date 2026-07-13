@@ -38,3 +38,4 @@
 - 2026-07-14｜Station GRU 重跑描述中的分号被 Hydra override 语法拒绝｜把自然语言直接放入未转义 override｜删除非必要描述 override 后按原科学配置成功运行｜Hydra 自由文本使用配置文件或先验证引号转义
 - 2026-07-14｜首次 held-out 评估路径含 `=` 被 Hydra 解析器拒绝｜PowerShell 引号未作为 Hydra 值的一部分保留｜在忽略目录复制同一 checkpoint 为 `best.ckpt` 后完成四模型评估｜CLI 评估统一使用不含 Hydra 特殊字符的 checkpoint 别名
 - 2026-07-14｜新增真实消融套件首次 dry run 仍加载旧安装而拒绝 `real_lag_v1`｜修改源码后未先确认 `DeepWater` 中包的安装模式｜将当前仓库重新安装为 editable 并成功完成 dry run 与三种消融 smoke｜每次新增 CLI 能力后先核对 `RiverLagNet.__file__` 指向当前工作树
+- 2026-07-14｜真实消融套件首个正式子进程在导入 site 时发生 UnicodeDecodeError｜编排器强制 `PYTHONUTF8=1`，与中文仓库路径的本地编码 editable `.pth` 冲突｜改为仅设置 `PYTHONIOENCODING=utf-8` 并清除子进程 UTF-8 模式｜Windows 中文路径下区分文件系统配置编码与标准流编码并增加环境回归测试
