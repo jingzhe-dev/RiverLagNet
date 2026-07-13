@@ -1,2 +1,5 @@
 name: riverlagnet_v0_1
 description: Synthetic engineering baseline; no real-data result claim.
+status: baseline
+record_result: true
+results_path: experiments/results.tsv

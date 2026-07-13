@@ -13,3 +13,4 @@
 - 2026-07-13｜数据清单检查用 `Path.read_text()` 默认 GBK 解码 UTF-8 JSON 失败｜遗漏显式文件编码｜改为 `read_text(encoding="utf-8")` 并完成检查｜所有项目 JSON 和 Markdown 读写显式声明 UTF-8
 - 2026-07-13｜假设 `conda` 已在 PATH 并用递归搜索定位导致一次超时｜未先读取 Conda 环境注册文件｜从 `.conda/environments.txt` 确认安装位置并使用绝对解释器路径｜Windows 环境发现优先读取注册配置而非递归扫描用户目录
 - 2026-07-13｜新导入 CLI 被旧的普通安装遮蔽而首次运行失败｜修改源码后未考虑非 editable 安装不会即时更新｜用当前仓库 `src` 设置 `PYTHONPATH` 后重跑成功｜源码 smoke 在普通安装模式下先重装，或显式绑定当前 `src`
+- 2026-07-13｜新增实验账本字段时遗漏 `synthetic_smoke` 配置组｜只修改默认实验配置，未检查同组替代项的结构一致性｜增加真实 Hydra 组合回归测试并同步根配置与包内镜像｜扩展 Hydra 配置结构时遍历同组所有 YAML 并测试替代组合

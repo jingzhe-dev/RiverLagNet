@@ -1,2 +1,5 @@
 name: synthetic_smoke
 description: One-batch synthetic smoke validation.
+status: baseline
+record_result: false
+results_path: experiments/results.tsv
