@@ -45,7 +45,7 @@ def route_pollutant_events(
         raise ValueError("identifiable v1 lags must be in 1..7 days")
     distance = edge_attr[:, 0]
     slope = edge_attr[:, 1]
-    base = 0.75 * torch.exp(-distance / 100.0) * torch.exp(-20.0 * slope)
+    base = 2.0 * torch.exp(-distance / 100.0) * torch.exp(-20.0 * slope)
     attenuation = base[:, None] * ROUTING_TARGET_MULTIPLIERS.to(edge_attr)
     total = local_events.clone()
     routed = torch.zeros_like(local_events)

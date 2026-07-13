@@ -42,7 +42,7 @@ def test_route_pollutant_events_applies_exact_lags_and_multihop_attenuation() ->
 
     total, routed = route_pollutant_events(events, edges, attrs)
 
-    first = 0.75 * torch.tensor([0.85, 1.0, 0.75])
+    first = 2.0 * torch.tensor([0.85, 1.0, 0.75])
     assert torch.allclose(routed[1, 1], first)
     assert torch.allclose(routed[3, 2], first.square())
     assert torch.count_nonzero(routed[:1, 1]) == 0

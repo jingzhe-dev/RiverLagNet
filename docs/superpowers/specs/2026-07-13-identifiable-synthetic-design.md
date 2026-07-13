@@ -124,7 +124,7 @@ load[t,n,v] = local_event[t,n,v]
 Terms with negative time indices are zero. Edge attenuation is:
 
 ```text
-base[e] = 0.75 * exp(-distance_km[e] / 100) * exp(-20 * slope[e])
+base[e] = 2.0 * exp(-distance_km[e] / 100) * exp(-20 * slope[e])
 attenuation[e,:] = base[e] * [0.85, 1.0, 0.75]
 ```
 
@@ -133,6 +133,8 @@ The routed contribution stored in `routed_load` excludes each node's own `local_
 ```text
 values = clamp_min(local_background + local_events + routed_load, 0)
 ```
+
+The base constant was calibrated before any model training by the predeclared data-only gates. Constants `1.25`, `1.5`, and `1.75` left at least one seed below the routed-variance lower bound; `2.0` was the smallest checked value for which all five seeds passed contribution, direction, and lag-recovery gates.
 
 Observed masks and quality scores use the existing deterministic mechanism after the complete values are generated.
 

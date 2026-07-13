@@ -88,7 +88,7 @@ def test_route_pollutant_events_applies_exact_lags_and_multihop_attenuation() ->
 
     total, routed = route_pollutant_events(events, edges, attrs)
 
-    first = 0.75 * torch.tensor([0.85, 1.0, 0.75])
+    first = 2.0 * torch.tensor([0.85, 1.0, 0.75])
     assert torch.allclose(routed[1, 1], first)
     assert torch.allclose(routed[3, 2], first.square())
     assert torch.count_nonzero(routed[:1, 1]) == 0
@@ -155,7 +155,7 @@ def route_pollutant_events(
         raise ValueError("identifiable v1 lags must be in 1..7 days")
     distance = edge_attr[:, 0]
     slope = edge_attr[:, 1]
-    base = 0.75 * torch.exp(-distance / 100.0) * torch.exp(-20.0 * slope)
+    base = 2.0 * torch.exp(-distance / 100.0) * torch.exp(-20.0 * slope)
     attenuation = base[:, None] * ROUTING_TARGET_MULTIPLIERS.to(edge_attr)
     total = local_events.clone()
     routed = torch.zeros_like(local_events)
