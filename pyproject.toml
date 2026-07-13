@@ -26,3 +26,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers"
+filterwarnings = [
+  "ignore:`torch.jit.script` is deprecated.*:DeprecationWarning:torch.jit._script",
+]
