@@ -1,0 +1,3 @@
+name: persistence
+hidden_dim: 64
+target_dim: 3

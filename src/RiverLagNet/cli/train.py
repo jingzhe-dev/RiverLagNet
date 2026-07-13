@@ -90,7 +90,7 @@ def run(cfg: DictConfig) -> dict[str, Any]:
     }
 
 
-@hydra.main(version_base="1.3", config_path="../../../configs", config_name="config")
+@hydra.main(version_base="1.3", config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Hydra CLI wrapper."""
     result = run(cfg)

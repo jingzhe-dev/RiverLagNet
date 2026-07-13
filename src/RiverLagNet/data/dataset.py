@@ -47,7 +47,7 @@ class RiverWindowDataset(Dataset[dict[str, Tensor]]):
         input_indices = torch.arange(forecast_start - self.input_window, forecast_start)
         target_indices = torch.arange(forecast_start, forecast_start + self.output_window)
         x = self.scaler.transform(self.data.values[input_indices])
-        y = self.scaler.transform(self.data.values[target_indices, :, : len(TARGET_NAMES)])
+        y = self.scaler.transform(self.data.values[target_indices])[..., : len(TARGET_NAMES)]
         quality = self.data.quality
         x_quality = (
             quality[input_indices]

@@ -18,3 +18,14 @@ def test_windows_use_past_inputs_and_targets_wholly_inside_split() -> None:
     assert sample["x"].shape == (20, 4, 3)
     assert sample["y"].shape == (10, 4, 3)
     assert sample["time_features"].shape == (20, 4)
+
+
+def test_targets_remain_three_channels_when_inputs_have_extra_variables() -> None:
+    data = generate_synthetic_river_data(
+        num_days=180, num_nodes=4, num_variables=5, seed=4
+    )
+    scaler = MaskedStandardScaler().fit(data.values[:126], data.observed[:126])
+    dataset = RiverWindowDataset(data, scaler, 126, 153, input_window=20, output_window=10)
+    sample = dataset[0]
+    assert sample["x"].shape[-1] == 5
+    assert sample["y"].shape[-1] == 3

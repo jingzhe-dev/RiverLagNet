@@ -10,7 +10,7 @@ from RiverLagNet.data.datamodule import RiverDataModule
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
 
 
-@hydra.main(version_base="1.3", config_path="../../../configs", config_name="config")
+@hydra.main(version_base="1.3", config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Load one checkpoint and evaluate it without model selection on test data."""
     if not cfg.checkpoint_path:

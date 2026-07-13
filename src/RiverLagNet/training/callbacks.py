@@ -25,5 +25,6 @@ class RuntimeStatsCallback(Callback):
         self.duration_s = time.perf_counter() - self.started_at
         if torch.cuda.is_available():
             self.peak_vram_gb = torch.cuda.max_memory_allocated() / 1024**3
-        pl_module.log("duration_s", self.duration_s)
-        pl_module.log("peak_vram_gb", self.peak_vram_gb)
+        metrics = {"duration_s": self.duration_s, "peak_vram_gb": self.peak_vram_gb}
+        for logger in trainer.loggers:
+            logger.log_metrics(metrics, step=trainer.global_step)

@@ -61,3 +61,18 @@ def test_training_dropout_does_not_change_reported_attention_normalization() -> 
     edges = torch.tensor([[0, 2], [1, 1]])
     _, attention = module(h_seq, h_seq[:, -1], edges, torch.randn(2, 2))
     assert torch.allclose(attention.sum(dim=(1, 2)), torch.ones(2), atol=1e-6)
+
+
+@torch.no_grad()
+def test_cuda_mixed_precision_keeps_attention_stable() -> None:
+    if not torch.cuda.is_available():
+        return
+    module = DirectedLagAwareMessagePassing(8, edge_dim=3, max_lag=3).cuda()
+    h_seq = torch.randn(2, 8, 4, 8, device="cuda")
+    edges = torch.tensor([[0, 1, 1], [1, 2, 3]], device="cuda")
+    edge_attr = torch.randn(3, 3, device="cuda")
+    with torch.autocast("cuda", dtype=torch.float16):
+        upstream, attention = module(h_seq, h_seq[:, -1], edges, edge_attr)
+    assert torch.isfinite(upstream).all()
+    assert attention.dtype == torch.float32
+    assert torch.allclose(attention.sum(dim=(1, 2)), torch.full((2,), 3.0, device="cuda"))

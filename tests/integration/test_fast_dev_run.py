@@ -2,6 +2,7 @@ import pytest
 from lightning.pytorch import Trainer
 
 from RiverLagNet.data.datamodule import RiverDataModule
+from RiverLagNet.training.callbacks import RuntimeStatsCallback
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
 
 
@@ -25,6 +26,7 @@ def test_synthetic_fast_dev_run_completes_for_trainable_models(model_name: str) 
         dropout=0.0,
     )
     module = RiverForecastModule(model)
+    runtime = RuntimeStatsCallback()
     trainer = Trainer(
         accelerator="cpu",
         devices=1,
@@ -32,7 +34,9 @@ def test_synthetic_fast_dev_run_completes_for_trainable_models(model_name: str) 
         logger=False,
         enable_checkpointing=False,
         enable_progress_bar=False,
+        callbacks=[runtime],
     )
     trainer.fit(module, datamodule=data)
     assert trainer.state.finished
     assert "val_macro_nse" in trainer.callback_metrics
+    assert runtime.duration_s > 0.0

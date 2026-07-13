@@ -83,14 +83,14 @@ class DirectedLagAwareMessagePassing(nn.Module):
             available.zero_()
             available.scatter_(1, fixed[:, None], True)
         logits = logits.masked_fill(~available[None], -torch.inf)
-        attention = torch.zeros_like(logits)
+        attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
         for node in destination.unique(sorted=True):
             incoming = destination == node
-            normalized = torch.softmax(logits[:, incoming].reshape(batch, -1), dim=-1)
+            normalized = torch.softmax(logits[:, incoming].reshape(batch, -1).float(), dim=-1)
             attention[:, incoming] = normalized.reshape(batch, int(incoming.sum()), lag_count)
         messages = self.message_projection(source_states)
-        message_weights = self.dropout(attention)
-        edge_messages = (message_weights[..., None] * messages).sum(dim=2)
+        message_weights = self.dropout(attention).to(messages.dtype)
+        edge_messages = (message_weights[..., None] * messages).sum(dim=2).to(h_seq.dtype)
         upstream = h_seq.new_zeros(batch, nodes, hidden)
         upstream.index_add_(1, destination, edge_messages)
         return upstream, attention

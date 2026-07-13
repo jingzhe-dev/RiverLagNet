@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
+*.log
 .pytest_cache/
 .coverage
 .hydra/

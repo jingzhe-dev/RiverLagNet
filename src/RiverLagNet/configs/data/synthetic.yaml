@@ -1,0 +1,10 @@
+num_days: 260
+num_nodes: 8
+num_variables: 3
+missing_rate: 0.08
+input_window: 90
+output_window: 30
+batch_size: 16
+num_workers: 0
+pin_memory: false
+seed: ${seed}
