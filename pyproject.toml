@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "RiverLagNet"
+version = "0.1.0"
+description = "Directed lag-aware river-network water-quality forecasting"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.1",
+  "torch-geometric>=2.4",
+  "lightning>=2.2",
+  "hydra-core>=1.3",
+  "omegaconf>=2.3",
+  "tensorboard>=2.14",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
