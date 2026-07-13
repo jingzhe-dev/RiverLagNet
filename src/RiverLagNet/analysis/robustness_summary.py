@@ -167,6 +167,7 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
     conditions = summary["conditions"]
     deltas = summary["paired_deltas"]
     assert isinstance(seeds, list) and isinstance(conditions, dict) and isinstance(deltas, dict)
+    identifiable = str(summary["suite"]).startswith("identifiable_")
     lines = [
         f"# {summary['report_title']}",
         "",
@@ -175,7 +176,7 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
         (
             "This report is generated from validation-selected checkpoints in the append-only experiment ledger. "
             "It tests an identifiable synthetic benchmark; it is not a real-world water-quality result or a formal significance test."
-            if summary["suite"] == "identifiable_v1"
+            if identifiable
             else "This report is generated from validation-selected checkpoints in the append-only experiment ledger. It tests engineering robustness on synthetic data; it is not a real-world water-quality result or a formal significance test."
         ),
         "",
@@ -221,7 +222,7 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
             f"{values['std_delta_macro_nse']:.4f} | {values['wins']}/{len(seeds)} | "
             f"{'yes' if supported else 'no'} |"
         )
-    if summary["suite"] == "identifiable_v1":
+    if identifiable:
         lines.extend(
             [
                 "",

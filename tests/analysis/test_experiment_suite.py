@@ -7,6 +7,7 @@ import pytest
 
 from RiverLagNet.analysis.experiment_suite import (
     CONDITION_NAMES,
+    IDENTIFIABLE_FUSION_V2,
     IDENTIFIABLE_V1,
     ROBUSTNESS_V1,
     build_experiment_specs,
@@ -180,7 +181,25 @@ def test_identifiable_preset_builds_unique_data_aware_specs() -> None:
     )
 
 
+def test_identity_safe_fusion_preset_has_new_names_and_outputs() -> None:
+    specs = build_experiment_specs([42, 43], IDENTIFIABLE_FUSION_V2)
+
+    assert len(specs) == 18
+    assert specs[0].experiment_name == "ident_fusion_v2_s42_persistence"
+    assert "data=synthetic_identifiable_v1" in training_command(specs[0], "python")
+    assert IDENTIFIABLE_FUSION_V2.summary_json.name == "identifiable_fusion_v2_summary.json"
+
+
+@pytest.mark.parametrize(
+    ("suite_name", "experiment_prefix"),
+    [
+        ("identifiable_v1", "ident_v1"),
+        ("identifiable_fusion_v2", "ident_fusion_v2"),
+    ],
+)
 def test_identifiable_cli_dry_run_gates_and_prints_preset_commands(
+    suite_name: str,
+    experiment_prefix: str,
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     gate = IdentifiabilityGateReport(
@@ -197,7 +216,7 @@ def test_identifiable_cli_dry_run_gates_and_prints_preset_commands(
     suite_cli.run(
         [
             "--suite",
-            "identifiable_v1",
+            suite_name,
             "--seeds",
             "42",
             "--ledger",
@@ -208,7 +227,7 @@ def test_identifiable_cli_dry_run_gates_and_prints_preset_commands(
 
     output = capsys.readouterr().out
     assert "suite_total=9" in output
-    assert "ident_v1_s42_persistence" in output
+    assert f"{experiment_prefix}_s42_persistence" in output
     assert "data=synthetic_identifiable_v1" in output
     assert calls == ["experiments\\identifiable_v1_data_gate.json"] or calls == [
         "experiments/identifiable_v1_data_gate.json"

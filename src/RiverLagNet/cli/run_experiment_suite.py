@@ -9,7 +9,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from RiverLagNet.analysis.experiment_suite import (
-    IDENTIFIABLE_V1,
     SUITE_PRESETS,
     build_experiment_specs,
     final_evaluation_output,
@@ -79,7 +78,7 @@ def run(argv: Sequence[str] | None = None) -> None:
         if not args.dry_run:
             run_final_evaluations(specs, sys.executable)
         return
-    if preset is IDENTIFIABLE_V1:
+    if preset.data_override == "synthetic_identifiable_v1":
         gate = run_identifiability_gate(args.seeds)
         write_identifiability_gate(
             gate,
@@ -87,7 +86,7 @@ def run(argv: Sequence[str] | None = None) -> None:
             Path("docs/identifiable_v1_data_gate_2026-07-13.md"),
         )
         if not gate.passed:
-            raise RuntimeError("identifiable_v1 data gate failed")
+            raise RuntimeError(f"{preset.name} data gate failed")
     successful = successful_experiment_names(args.ledger)
     pending = pending_experiment_specs(specs, successful)
     print(f"suite_total={len(specs)} successful={len(specs) - len(pending)} pending={len(pending)}")

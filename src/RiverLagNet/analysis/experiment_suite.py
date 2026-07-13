@@ -104,8 +104,18 @@ IDENTIFIABLE_V1 = SuitePreset(
     report_title="RiverLagNet identifiable synthetic benchmark report",
     primary_comparisons=("no_graph", "shuffled_graph", "no_lag"),
 )
+IDENTIFIABLE_FUSION_V2 = SuitePreset(
+    name="identifiable_fusion_v2",
+    experiment_prefix="ident_fusion_v2",
+    data_override="synthetic_identifiable_v1",
+    summary_json=Path("experiments/identifiable_fusion_v2_summary.json"),
+    summary_markdown=Path("docs/identifiable_fusion_v2_report_2026-07-13.md"),
+    report_title="RiverLagNet identity-safe fusion benchmark report",
+    primary_comparisons=("no_graph", "shuffled_graph", "no_lag"),
+)
 SUITE_PRESETS = {
-    preset.name: preset for preset in (ROBUSTNESS_V1, IDENTIFIABLE_V1)
+    preset.name: preset
+    for preset in (ROBUSTNESS_V1, IDENTIFIABLE_V1, IDENTIFIABLE_FUSION_V2)
 }
 
 

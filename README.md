@@ -108,6 +108,20 @@ conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite id
 
 In v1 the edge travel-time prior equals the true lag, so `fixed_lag` is an oracle-like comparator and learned lag is not required to outperform it. The undirected graph contains every correct edge plus reverse edges, so it is reported but is not a primary directionality decision. See the [data-gate report](docs/identifiable_v1_data_gate_2026-07-13.md). This constructed benchmark tests engineering identifiability, not field predictive skill or observational causality.
 
+The first identifiable-v1 model run completed all 45 jobs without a crash but
+failed the predeclared mechanism rule: learned-lag validation macro NSE was
+lower than `no_graph` by `0.0194`, `shuffled_graph` by `0.0238`, and `no_lag`
+by `0.0095`. Checkpoint diagnostics showed near-uniform lag attention and a
+fusion gate that attenuated local state even when no upstream message existed.
+The identity-safe fusion revision keeps the local representation as an exact
+residual base and starts the upstream correction near zero. Its independent
+matrix uses a new immutable namespace:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_fusion_v2
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_fusion_v2 --summarize
+```
+
 ## Models and ablations
 
 The common training/evaluation path supports:
