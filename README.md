@@ -85,6 +85,29 @@ All 45 training jobs completed without a crash. Full RiverLagNet validation macr
 
 These are synthetic engineering results, not evidence of field predictive skill. A separate [Caravan-Qual readiness audit](docs/data/caravan-qual-readiness-audit-2026-07-13.md) found that the available three-target observations are too sparse for the fixed daily 90-to-30 main experiment without changing the scientific task.
 
+## Identifiable directed-lag benchmark
+
+`data=synthetic_identifiable_v1` preserves the 90-to-30 task while adding independent slowly varying pollutant events that propagate only along the true directed tree. Synthetic truth components are retained for data diagnostics but never enter model batches.
+
+Run the training-only data gate before any benchmark training:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.check_identifiability
+```
+
+The frozen v1 gate passes all five seeds: routed contribution accounts for `0.247–0.491` of non-root variance, true direction exceeds reversed/shuffled controls by `0.207–0.492`, and all `105/105` edge-target lags are recovered within one day. The gate uses only the chronological training period.
+
+Run, summarize, and finally evaluate the versioned matrix with:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_v1
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_v1 --summarize
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_v1 --evaluate-final
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_v1 --summarize
+```
+
+In v1 the edge travel-time prior equals the true lag, so `fixed_lag` is an oracle-like comparator and learned lag is not required to outperform it. The undirected graph contains every correct edge plus reverse edges, so it is reported but is not a primary directionality decision. See the [data-gate report](docs/identifiable_v1_data_gate_2026-07-13.md). This constructed benchmark tests engineering identifiability, not field predictive skill or observational causality.
+
 ## Models and ablations
 
 The common training/evaluation path supports:
