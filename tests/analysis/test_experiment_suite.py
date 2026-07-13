@@ -7,6 +7,8 @@ import pytest
 
 from RiverLagNet.analysis.experiment_suite import (
     CONDITION_NAMES,
+    IDENTIFIABLE_V1,
+    ROBUSTNESS_V1,
     build_experiment_specs,
     evaluation_command,
     final_checkpoint_path,
@@ -16,6 +18,8 @@ from RiverLagNet.analysis.experiment_suite import (
     successful_experiment_names,
     training_command,
 )
+from RiverLagNet.analysis.synthetic_identifiability import IdentifiabilityGateReport
+from RiverLagNet.cli import run_experiment_suite as suite_cli
 from RiverLagNet.training.experiment_log import (
     ExperimentRecord,
     append_experiment_record,
@@ -152,3 +156,60 @@ def test_final_checkpoint_path_requires_exactly_one_checkpoint(tmp_path: Path) -
     (directory / "b.ckpt").touch()
     with pytest.raises(ValueError, match="exactly one"):
         final_checkpoint_path(spec)
+
+
+def test_historical_preset_keeps_exact_names_and_command() -> None:
+    spec = build_experiment_specs([42], ROBUSTNESS_V1)[0]
+
+    assert spec.experiment_name == "robust_s42_persistence"
+    command = training_command(spec, "python")
+    assert "data=synthetic_identifiable_v1" not in command
+
+
+def test_identifiable_preset_builds_unique_data_aware_specs() -> None:
+    specs = build_experiment_specs([42, 43, 44, 45, 46], IDENTIFIABLE_V1)
+
+    assert len(specs) == 45
+    assert len({spec.experiment_name for spec in specs}) == 45
+    assert specs[0].experiment_name == "ident_v1_s42_persistence"
+    assert "data=synthetic_identifiable_v1" in training_command(specs[0], "python")
+    learned = next(spec for spec in specs if spec.condition.name == "learned_lag")
+    checkpoint = learned.run_dir / "checkpoints" / "best.ckpt"
+    assert "data=synthetic_identifiable_v1" in evaluation_command(
+        learned, checkpoint, "python"
+    )
+
+
+def test_identifiable_cli_dry_run_gates_and_prints_preset_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gate = IdentifiabilityGateReport(
+        passed=True, scenarios=(), pooled_lag_recovery_rate=1.0
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(suite_cli, "run_identifiability_gate", lambda seeds: gate)
+    monkeypatch.setattr(
+        suite_cli,
+        "write_identifiability_gate",
+        lambda report, json_path, markdown_path: calls.append(str(json_path)),
+    )
+
+    suite_cli.run(
+        [
+            "--suite",
+            "identifiable_v1",
+            "--seeds",
+            "42",
+            "--ledger",
+            str(tmp_path / "results.tsv"),
+            "--dry-run",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "suite_total=9" in output
+    assert "ident_v1_s42_persistence" in output
+    assert "data=synthetic_identifiable_v1" in output
+    assert calls == ["experiments\\identifiable_v1_data_gate.json"] or calls == [
+        "experiments/identifiable_v1_data_gate.json"
+    ]

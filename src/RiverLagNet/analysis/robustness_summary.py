@@ -20,13 +20,6 @@ SUMMARY_METRICS = (
     "duration_s",
     "peak_vram_gb",
 )
-ABLATION_NAMES = (
-    "no_graph",
-    "undirected_graph",
-    "shuffled_graph",
-    "no_lag",
-    "fixed_lag",
-)
 TEST_METRICS = (
     "test_macro_nse",
     "test_macro_mae",
@@ -102,6 +95,10 @@ def summarize_validation(
     commits = {row["commit"] for row in rows}
     if len(commits) != 1:
         raise ValueError("suite rows must share one commit")
+    presets = {spec.preset for spec in specs}
+    if len(presets) != 1:
+        raise ValueError("suite specifications must share one preset")
+    preset = next(iter(presets))
 
     conditions: dict[str, dict[str, dict[str, float | int]]] = {}
     for condition_name in dict.fromkeys(spec.condition.name for spec in specs):
@@ -116,7 +113,7 @@ def summarize_validation(
         for spec, row in paired
     }
     paired_deltas: dict[str, dict[str, Any]] = {}
-    for ablation in ABLATION_NAMES:
+    for ablation in preset.primary_comparisons:
         seed_deltas = {
             str(seed): nse_by_condition_seed[("learned_lag", seed)]
             - nse_by_condition_seed[(ablation, seed)]
@@ -130,6 +127,8 @@ def summarize_validation(
             "seed_deltas": seed_deltas,
         }
     return {
+        "suite": preset.name,
+        "report_title": preset.report_title,
         "seeds": seeds,
         "commit": next(iter(commits)),
         "experiment_count": len(rows),
@@ -169,11 +168,16 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
     deltas = summary["paired_deltas"]
     assert isinstance(seeds, list) and isinstance(conditions, dict) and isinstance(deltas, dict)
     lines = [
-        "# RiverLagNet multi-seed robustness and ablation report",
+        f"# {summary['report_title']}",
         "",
         "## Technical summary",
         "",
-        "This report is generated from validation-selected checkpoints in the append-only experiment ledger. It tests engineering robustness on synthetic data; it is not a real-world water-quality result or a formal significance test.",
+        (
+            "This report is generated from validation-selected checkpoints in the append-only experiment ledger. "
+            "It tests an identifiable synthetic benchmark; it is not a real-world water-quality result or a formal significance test."
+            if summary["suite"] == "identifiable_v1"
+            else "This report is generated from validation-selected checkpoints in the append-only experiment ledger. It tests engineering robustness on synthetic data; it is not a real-world water-quality result or a formal significance test."
+        ),
         "",
         "## Scope and evidence",
         "",
@@ -216,6 +220,15 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
             f"| {name} | {values['mean_delta_macro_nse']:.4f} | "
             f"{values['std_delta_macro_nse']:.4f} | {values['wins']}/{len(seeds)} | "
             f"{'yes' if supported else 'no'} |"
+        )
+    if summary["suite"] == "identifiable_v1":
+        lines.extend(
+            [
+                "",
+                "## Comparator interpretation",
+                "",
+                "The fixed-lag condition receives the exact synthetic travel-time prior and is therefore an oracle-like comparator. The undirected condition contains every correct edge plus reverse edges, so it is reported but is not a primary directionality decision in this suite.",
+            ]
         )
     test = summary.get("test")
     if test is not None:
