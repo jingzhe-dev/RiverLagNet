@@ -1,5 +1,5 @@
-scenario: legacy
-num_days: 260
+scenario: identifiable_v1
+num_days: 520
 num_nodes: 8
 num_variables: 3
 missing_rate: 0.08

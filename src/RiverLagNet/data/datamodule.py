@@ -11,6 +11,10 @@ from .dataset import RiverWindowDataset, river_collate
 from .normalization import MaskedStandardScaler
 from .schema import TimeSeriesData
 from .synthetic import generate_synthetic_river_data
+from .synthetic_identifiable import (
+    SyntheticScenario,
+    generate_identifiable_synthetic_scenario,
+)
 
 
 @dataclass(frozen=True)
@@ -39,10 +43,14 @@ class RiverDataModule(LightningDataModule):
         num_workers: int = 0,
         pin_memory: bool = False,
         seed: int = 42,
+        scenario: str = "legacy",
     ) -> None:
         super().__init__()
+        if scenario not in {"legacy", "identifiable_v1"}:
+            raise ValueError("scenario must be legacy or identifiable_v1")
         self.save_hyperparameters()
         self.data: TimeSeriesData | None = None
+        self.synthetic_scenario: SyntheticScenario | None = None
         self.scaler: MaskedStandardScaler | None = None
         self.train_dataset: RiverWindowDataset
         self.val_dataset: RiverWindowDataset
@@ -53,13 +61,23 @@ class RiverDataModule(LightningDataModule):
     def setup(self, stage: str | None = None) -> None:
         """Generate data once, fit train-only statistics, and build split windows."""
         if self.data is None:
-            self.data = generate_synthetic_river_data(
-                num_days=self.hparams.num_days,
-                num_nodes=self.hparams.num_nodes,
-                num_variables=self.hparams.num_variables,
-                missing_rate=self.hparams.missing_rate,
-                seed=self.hparams.seed,
-            )
+            if self.hparams.scenario == "identifiable_v1":
+                self.synthetic_scenario = generate_identifiable_synthetic_scenario(
+                    num_days=self.hparams.num_days,
+                    num_nodes=self.hparams.num_nodes,
+                    num_variables=self.hparams.num_variables,
+                    missing_rate=self.hparams.missing_rate,
+                    seed=self.hparams.seed,
+                )
+                self.data = self.synthetic_scenario.data
+            else:
+                self.data = generate_synthetic_river_data(
+                    num_days=self.hparams.num_days,
+                    num_nodes=self.hparams.num_nodes,
+                    num_variables=self.hparams.num_variables,
+                    missing_rate=self.hparams.missing_rate,
+                    seed=self.hparams.seed,
+                )
             self.scaler = MaskedStandardScaler().fit(
                 self.data.values[: self.train_end], self.data.observed[: self.train_end]
             )
