@@ -9,6 +9,7 @@ import pytest
 
 from RiverLagNet.analysis.experiment_suite import build_experiment_specs
 from RiverLagNet.analysis.robustness_summary import (
+    aggregate_test_metrics,
     load_successful_suite_rows,
     render_validation_markdown,
     summarize_validation,
@@ -141,3 +142,35 @@ def test_load_successful_suite_rows_rejects_mixed_commits(tmp_path: Path) -> Non
     ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="commit"):
         load_successful_suite_rows(ledger, specs)
+
+
+def test_aggregate_test_metrics_and_render_held_out_section(tmp_path: Path) -> None:
+    paths: dict[int, Path] = {}
+    for seed, nse in ((42, 0.6), (43, 0.8)):
+        path = tmp_path / f"seed-{seed}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "test_macro_nse": nse,
+                    "test_macro_mae": 0.2,
+                    "test_macro_rmse": 0.3,
+                    "test_nse_NH3N": nse - 0.1,
+                    "test_nse_CODMn": nse,
+                    "test_nse_TP": nse + 0.1,
+                }
+            ),
+            encoding="utf-8",
+        )
+        paths[seed] = path
+
+    test_summary = aggregate_test_metrics(paths)
+    assert test_summary["metrics"]["test_macro_nse"]["mean"] == pytest.approx(0.7)
+    assert test_summary["metrics"]["test_macro_nse"]["count"] == 2
+
+    ledger = tmp_path / "results.tsv"
+    specs = _miniature_ledger(ledger)
+    summary = summarize_validation(load_successful_suite_rows(ledger, specs), specs)
+    summary["test"] = test_summary
+    markdown = render_validation_markdown(summary)
+    assert "Held-out test results" in markdown
+    assert "test_macro_nse" in markdown

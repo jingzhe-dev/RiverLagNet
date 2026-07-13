@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from RiverLagNet.analysis.experiment_suite import (
     CONDITION_NAMES,
     build_experiment_specs,
+    evaluation_command,
+    final_checkpoint_path,
+    final_evaluation_output,
     pending_experiment_specs,
     run_experiment_specs,
     successful_experiment_names,
@@ -107,3 +113,42 @@ def test_dry_run_returns_commands_without_invoking_subprocess(
 
     assert len(commands) == 2
     assert all(command[0] == "python" for command in commands)
+
+
+def test_final_evaluation_command_uses_only_selected_learned_lag_checkpoint(
+    tmp_path: Path,
+) -> None:
+    learned = next(
+        spec
+        for spec in build_experiment_specs([42])
+        if spec.condition.name == "learned_lag"
+    )
+    learned = replace(learned, run_dir=tmp_path / learned.experiment_name)
+    checkpoint = learned.run_dir / "checkpoints" / "epoch=004-val_nse=0.7000.ckpt"
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.touch()
+
+    selected = final_checkpoint_path(learned)
+    command = evaluation_command(learned, selected, "python")
+
+    assert selected == checkpoint
+    assert "model=riverlagnet" in command
+    assert "seed=42" in command
+    assert "model.graph_variant=directed" in command
+    assert "model.lag_mode=learned_lag" in command
+    assert f'checkpoint_path="{checkpoint.as_posix()}"' in command
+    assert f"evaluation_output={final_evaluation_output(learned).as_posix()}" in command
+
+
+def test_final_checkpoint_path_requires_exactly_one_checkpoint(tmp_path: Path) -> None:
+    spec = replace(build_experiment_specs([42])[-1], run_dir=tmp_path / "run")
+
+    with pytest.raises(ValueError, match="exactly one"):
+        final_checkpoint_path(spec)
+
+    directory = spec.run_dir / "checkpoints"
+    directory.mkdir(parents=True)
+    (directory / "a.ckpt").touch()
+    (directory / "b.ckpt").touch()
+    with pytest.raises(ValueError, match="exactly one"):
+        final_checkpoint_path(spec)

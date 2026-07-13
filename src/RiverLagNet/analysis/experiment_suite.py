@@ -127,6 +127,43 @@ def training_command(spec: ExperimentSpec, python_executable: str) -> list[str]:
     ]
 
 
+def final_evaluation_output(spec: ExperimentSpec) -> Path:
+    """Return the ignored JSON path for one final held-out evaluation."""
+    return spec.run_dir / "test_metrics.json"
+
+
+def final_checkpoint_path(spec: ExperimentSpec) -> Path:
+    """Select the sole validation-best checkpoint written by one training run."""
+    if spec.condition.name != "learned_lag":
+        raise ValueError("final test evaluation is restricted to learned_lag")
+    checkpoints = tuple(sorted((spec.run_dir / "checkpoints").glob("*.ckpt")))
+    if len(checkpoints) != 1:
+        raise ValueError(
+            f"expected exactly one checkpoint for {spec.experiment_name}, found {len(checkpoints)}"
+        )
+    return checkpoints[0]
+
+
+def evaluation_command(
+    spec: ExperimentSpec, checkpoint_path: Path, python_executable: str
+) -> list[str]:
+    """Build the held-out evaluation command for one full-model seed."""
+    if spec.condition.name != "learned_lag":
+        raise ValueError("final test evaluation is restricted to learned_lag")
+    return [
+        python_executable,
+        "-m",
+        "RiverLagNet.cli.evaluate",
+        f"seed={spec.seed}",
+        "model=riverlagnet",
+        "model.graph_variant=directed",
+        "model.lag_mode=learned_lag",
+        f'checkpoint_path="{Path(checkpoint_path).as_posix()}"',
+        f"evaluation_output={final_evaluation_output(spec).as_posix()}",
+        "trainer.enable_progress_bar=false",
+    ]
+
+
 def run_experiment_specs(
     specs: Iterable[ExperimentSpec],
     python_executable: str,
@@ -134,6 +171,25 @@ def run_experiment_specs(
 ) -> list[list[str]]:
     """Run specs sequentially and stop immediately when a subprocess fails."""
     commands = [training_command(spec, python_executable) for spec in specs]
+    if dry_run:
+        return commands
+    environment = {**os.environ, "PYTHONUTF8": "1"}
+    for command in commands:
+        subprocess.run(command, check=True, env=environment)
+    return commands
+
+
+def run_final_evaluations(
+    specs: Iterable[ExperimentSpec],
+    python_executable: str,
+    dry_run: bool = False,
+) -> list[list[str]]:
+    """Evaluate each full learned-lag seed once after validation decisions are final."""
+    selected = tuple(spec for spec in specs if spec.condition.name == "learned_lag")
+    commands = [
+        evaluation_command(spec, final_checkpoint_path(spec), python_executable)
+        for spec in selected
+    ]
     if dry_run:
         return commands
     environment = {**os.environ, "PYTHONUTF8": "1"}

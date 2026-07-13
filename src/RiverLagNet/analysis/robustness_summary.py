@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import statistics
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -25,6 +26,14 @@ ABLATION_NAMES = (
     "shuffled_graph",
     "no_lag",
     "fixed_lag",
+)
+TEST_METRICS = (
+    "test_macro_nse",
+    "test_macro_mae",
+    "test_macro_rmse",
+    "test_nse_NH3N",
+    "test_nse_CODMn",
+    "test_nse_TP",
 )
 
 
@@ -129,6 +138,30 @@ def summarize_validation(
     }
 
 
+def aggregate_test_metrics(paths_by_seed: Mapping[int, Path]) -> dict[str, object]:
+    """Aggregate held-out full-model metrics without feeding them into selection."""
+    if not paths_by_seed:
+        raise ValueError("at least one held-out test result is required")
+    values: dict[str, list[float]] = {metric: [] for metric in TEST_METRICS}
+    for seed, path in sorted(paths_by_seed.items()):
+        try:
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"invalid test result for seed {seed}: {path}") from error
+        for metric in TEST_METRICS:
+            try:
+                value = float(payload[metric])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError(f"seed {seed} has invalid {metric}") from error
+            if not math.isfinite(value):
+                raise ValueError(f"seed {seed} has non-finite {metric}")
+            values[metric].append(value)
+    return {
+        "seeds": sorted(paths_by_seed),
+        "metrics": {metric: _statistics(metric_values) for metric, metric_values in values.items()},
+    }
+
+
 def render_validation_markdown(summary: Mapping[str, object]) -> str:
     """Render an answer-first technical report from a validation summary."""
     seeds = summary["seeds"]
@@ -184,6 +217,28 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
             f"{values['std_delta_macro_nse']:.4f} | {values['wins']}/{len(seeds)} | "
             f"{'yes' if supported else 'no'} |"
         )
+    test = summary.get("test")
+    if test is not None:
+        assert isinstance(test, dict)
+        test_metrics = test["metrics"]
+        assert isinstance(test_metrics, dict)
+        lines.extend(
+            [
+                "",
+                "## Held-out test results",
+                "",
+                "These metrics summarize only the five full learned-lag checkpoints after all validation comparisons were fixed.",
+                "",
+                "| Metric | Runs | Mean 卤 SD | Min | Max |",
+                "|---|---:|---:|---:|---:|",
+            ]
+        )
+        for metric in TEST_METRICS:
+            stats = test_metrics[metric]
+            lines.append(
+                f"| {metric} | {stats['count']} | {stats['mean']:.4f} 卤 {stats['std']:.4f} | "
+                f"{stats['min']:.4f} | {stats['max']:.4f} |"
+            )
     lines.extend(
         [
             "",

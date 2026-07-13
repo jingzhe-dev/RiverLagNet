@@ -8,6 +8,7 @@ defaults:
 seed: 42
 run_dir: runs/${experiment.name}
 checkpoint_path: null
+evaluation_output: null
 
 hydra:
   run:

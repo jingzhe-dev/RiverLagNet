@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
+
 import hydra
+import torch
 from lightning.pytorch import Trainer, seed_everything
 from omegaconf import DictConfig, OmegaConf
 
@@ -10,9 +15,12 @@ from RiverLagNet.data.datamodule import RiverDataModule
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
 
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="config")
-def main(cfg: DictConfig) -> None:
-    """Load one checkpoint and evaluate it without model selection on test data."""
+def _metric_float(value: Any) -> float:
+    return float(value.detach().cpu()) if isinstance(value, torch.Tensor) else float(value)
+
+
+def run(cfg: DictConfig) -> dict[str, float]:
+    """Evaluate one validation-selected checkpoint on the held-out test split."""
     if not cfg.checkpoint_path:
         raise ValueError("checkpoint_path must be provided for evaluation")
     seed_everything(int(cfg.seed), workers=True)
@@ -32,10 +40,32 @@ def main(cfg: DictConfig) -> None:
     trainer = Trainer(
         accelerator=str(cfg.trainer.accelerator),
         devices=cfg.trainer.devices,
+        precision=(
+            str(cfg.trainer.precision)
+            if torch.cuda.is_available() and str(cfg.trainer.accelerator) != "cpu"
+            else "32-true"
+        ),
         deterministic=bool(cfg.trainer.deterministic),
         logger=False,
+        enable_progress_bar=bool(cfg.trainer.enable_progress_bar),
     )
-    trainer.test(module, datamodule=datamodule)
+    results = trainer.test(module, datamodule=datamodule, verbose=False)
+    if len(results) != 1:
+        raise RuntimeError("expected one test metric dictionary")
+    metrics = {name: _metric_float(value) for name, value in results[0].items()}
+    if cfg.evaluation_output:
+        output_path = Path(str(cfg.evaluation_output))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(metrics, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    return metrics
+
+
+@hydra.main(version_base="1.3", config_path="../configs", config_name="config")
+def main(cfg: DictConfig) -> None:
+    """Hydra CLI wrapper for held-out test evaluation."""
+    print(json.dumps(run(cfg), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 # Agent error log
 
+- 2026-07-13｜用 1 秒 shell 超时启动全量 pytest，进程被工具终止｜误以为该调用必然返回可等待的后台 cell｜改用足够的命令超时并完成 68 项测试｜仅对明确返回 cell 的命令使用 wait，普通长测试直接给足超时
+- 2026-07-13｜再次直接调用不在 PATH 的 `conda`，随后用递归搜索导致超时｜没有沿用已发现的 DeepWater 绝对解释器路径｜改用 `C:\Program Files\ANACONDA\envs\DeepWater\python.exe` 并成功重跑测试｜本任务后续命令固定使用该绝对路径
+
 - 2026-07-13｜并行环境探测被一个失败命令整体中断｜未隔离预期可能失败的 Git/Conda 子命令｜改为逐项捕获结果并在正确仓库根目录运行｜后续并行探测对每个命令单独处理退出码
 - 2026-07-13｜复制根 AGENTS.md 时调用了 V8 环境不存在的 `atob` 和 `TextDecoder`｜错误假设 JavaScript Web API 可用｜改用显式 Base64 与 UTF-8 解码后通过 apply_patch 写入｜使用运行时已声明能力或先做无副作用能力检查
 - 2026-07-13｜`conda run` 转发 pytest 输出时发生 GBK 编码异常｜未预设 Windows 中文路径下的 UTF-8 输出｜中间测试直接调用 DeepWater 解释器，最终命令设置 UTF-8 并验证｜Windows 自动化命令显式设置 `PYTHONUTF8=1`
