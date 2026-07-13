@@ -31,7 +31,7 @@ class RiverLagNet(nn.Module):
         dropout: float = 0.0,
         graph_seed: int = 42,
         lag_prior_scale_days: float = 1.0,
-        lag_prior_strength: float = 2.0,
+        lag_prior_strength: float = 8.0,
         **_: object,
     ) -> None:
         super().__init__()

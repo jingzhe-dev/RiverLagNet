@@ -25,7 +25,7 @@ class DirectedLagAwareMessagePassing(nn.Module):
         lag_mode: str = "learned_lag",
         dropout: float = 0.0,
         prior_scale_days: float = 1.0,
-        prior_strength: float = 2.0,
+        prior_strength: float = 8.0,
     ) -> None:
         super().__init__()
         if lag_mode not in LAG_MODES:

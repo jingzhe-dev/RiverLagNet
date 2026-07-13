@@ -85,3 +85,4 @@ def test_identifiable_hydra_config_has_fixed_window_contract() -> None:
     assert cfg.data.num_days == 520
     assert cfg.data.input_window == 90
     assert cfg.data.output_window == 30
+    assert cfg.model.lag_prior_strength == 8.0
