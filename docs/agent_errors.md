@@ -1,5 +1,7 @@
 # Agent error log
 
+- 2026-07-13｜根据 PowerShell `Get-Content` 的乱码显示尝试修正 README，补丁因源码不匹配被拒绝｜把终端渲染误当成 UTF-8 文件内容｜用 Python `read_text(encoding="utf-8")` 核对码点后确认源码正确，仅新增所需章节｜判断乱码前先检查文件实际 Unicode 内容
+- 2026-07-13｜新增 held-out 报告表格时把 `±` 误写为 `卤`｜补丁文本中的字符未与同文件既有模板核对｜统一改回 `±` 并增加禁止该乱码字符的回归断言｜新增非 ASCII 展示文本时比较同文件工作样例并检查 Unicode 码点
 - 2026-07-13｜用 1 秒 shell 超时启动全量 pytest，进程被工具终止｜误以为该调用必然返回可等待的后台 cell｜改用足够的命令超时并完成 68 项测试｜仅对明确返回 cell 的命令使用 wait，普通长测试直接给足超时
 - 2026-07-13｜再次直接调用不在 PATH 的 `conda`，随后用递归搜索导致超时｜没有沿用已发现的 DeepWater 绝对解释器路径｜改用 `C:\Program Files\ANACONDA\envs\DeepWater\python.exe` 并成功重跑测试｜本任务后续命令固定使用该绝对路径
 

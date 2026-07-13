@@ -229,14 +229,14 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
                 "",
                 "These metrics summarize only the five full learned-lag checkpoints after all validation comparisons were fixed.",
                 "",
-                "| Metric | Runs | Mean 卤 SD | Min | Max |",
+                "| Metric | Runs | Mean ± SD | Min | Max |",
                 "|---|---:|---:|---:|---:|",
             ]
         )
         for metric in TEST_METRICS:
             stats = test_metrics[metric]
             lines.append(
-                f"| {metric} | {stats['count']} | {stats['mean']:.4f} 卤 {stats['std']:.4f} | "
+                f"| {metric} | {stats['count']} | {stats['mean']:.4f} ± {stats['std']:.4f} | "
                 f"{stats['min']:.4f} | {stats['max']:.4f} |"
             )
     lines.extend(

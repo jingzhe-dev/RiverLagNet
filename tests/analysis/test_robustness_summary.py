@@ -174,3 +174,5 @@ def test_aggregate_test_metrics_and_render_held_out_section(tmp_path: Path) -> N
     markdown = render_validation_markdown(summary)
     assert "Held-out test results" in markdown
     assert "test_macro_nse" in markdown
+    assert "Mean ± SD" in markdown
+    assert "卤" not in markdown

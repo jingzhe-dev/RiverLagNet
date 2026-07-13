@@ -70,6 +70,21 @@ conda run -n DeepWater python -m RiverLagNet.cli.train model=riverlagnet experim
 
 RiverLagNet achieved validation/test macro NSE of `0.6697/0.6283` in this single-seed synthetic run. Checkpoints and full logs remain under ignored `runs/` directories. See the [complete training report](docs/training_run_2026-07-13.md) for all metrics and limitations; these values are not empirical water-quality results.
 
+## Multi-seed robustness suite
+
+The paired robustness matrix covers five seeds (`42`–`46`) and nine conditions: three baselines, five RiverLagNet ablations, and the full learned-lag model. The runner is resumable from successful rows in `experiments/results.tsv`:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --summarize
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --evaluate-final
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --summarize
+```
+
+All 45 training jobs completed without a crash. Full RiverLagNet validation macro NSE was `0.7067 ± 0.0404`; its held-out test macro NSE across the five validation-selected checkpoints was `0.6865 ± 0.0561`. The predeclared validation rule directionally supported learned lag over `no_graph`, `no_lag`, and `fixed_lag`, but did not support the full model over `undirected_graph` or `shuffled_graph`. See the [multi-seed robustness report](docs/robustness_report_2026-07-13.md) and machine-readable [summary](experiments/robustness_summary.json).
+
+These are synthetic engineering results, not evidence of field predictive skill. A separate [Caravan-Qual readiness audit](docs/data/caravan-qual-readiness-audit-2026-07-13.md) found that the available three-target observations are too sparse for the fixed daily 90-to-30 main experiment without changing the scientific task.
+
 ## Models and ablations
 
 The common training/evaluation path supports:
