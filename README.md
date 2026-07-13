@@ -130,6 +130,19 @@ isolates the remaining issue to lag/horizon alignment rather than unsafe local
 fusion. See the [fusion-v2 validation report](docs/identifiable_fusion_v2_report_2026-07-13.md)
 and machine-readable [summary](experiments/identifiable_fusion_v2_summary.json).
 
+The final horizon-aligned revision routes `t+h-τ` source states separately for
+every forecast lead, uses the last observed source hidden state as a
+leakage-free proxy when the aligned source time is in the future, applies the
+edge travel-time prior as a trainable residual anchor, and decodes upstream
+effects through an additive output correction that is exactly zero without an
+upstream message. Its shuffled control is a strict null graph with no
+self-loops or true-edge overlap. Run the frozen five-seed matrix with:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_horizon_v5
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite identifiable_horizon_v5 --summarize
+```
+
 ## Models and ablations
 
 The common training/evaluation path supports:

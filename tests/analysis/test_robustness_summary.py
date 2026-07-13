@@ -9,6 +9,7 @@ import pytest
 
 from RiverLagNet.analysis.experiment_suite import (
     IDENTIFIABLE_FUSION_V2,
+    IDENTIFIABLE_HORIZON_V5,
     IDENTIFIABLE_V1,
     build_experiment_specs,
 )
@@ -238,3 +239,31 @@ def test_identity_safe_fusion_summary_keeps_identifiable_boundaries(tmp_path: Pa
     assert summary["suite"] == "identifiable_fusion_v2"
     assert "identifiable synthetic benchmark" in markdown.lower()
     assert "exact" in markdown.lower() and "fixed" in markdown.lower()
+
+
+def test_horizon_routing_summary_keeps_primary_decision_contract(tmp_path: Path) -> None:
+    ledger = tmp_path / "results.tsv"
+    specs = build_experiment_specs([42, 43], IDENTIFIABLE_HORIZON_V5)
+    offsets = {
+        "persistence": 0.1,
+        "station_gru": 0.5,
+        "static_gat": 0.55,
+        "no_graph": 0.60,
+        "undirected_graph": 0.62,
+        "shuffled_graph": 0.58,
+        "no_lag": 0.65,
+        "fixed_lag": 0.67,
+        "learned_lag": 0.70,
+    }
+    for spec in specs:
+        append_experiment_record(
+            ledger,
+            _record(spec.experiment_name, spec.seed, offsets[spec.condition.name]),
+        )
+
+    summary = summarize_validation(load_successful_suite_rows(ledger, specs), specs)
+    markdown = render_validation_markdown(summary)
+
+    assert summary["suite"] == "identifiable_horizon_v5"
+    assert set(summary["paired_deltas"]) == {"no_graph", "shuffled_graph", "no_lag"}
+    assert "identifiable synthetic benchmark" in markdown.lower()

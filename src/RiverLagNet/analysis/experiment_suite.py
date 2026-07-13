@@ -113,9 +113,23 @@ IDENTIFIABLE_FUSION_V2 = SuitePreset(
     report_title="RiverLagNet identity-safe fusion benchmark report",
     primary_comparisons=("no_graph", "shuffled_graph", "no_lag"),
 )
+IDENTIFIABLE_HORIZON_V5 = SuitePreset(
+    name="identifiable_horizon_v5",
+    experiment_prefix="ident_horizon_v5",
+    data_override="synthetic_identifiable_v1",
+    summary_json=Path("experiments/identifiable_horizon_v5_summary.json"),
+    summary_markdown=Path("docs/identifiable_horizon_v5_report_2026-07-13.md"),
+    report_title="RiverLagNet horizon-aligned routing benchmark report",
+    primary_comparisons=("no_graph", "shuffled_graph", "no_lag"),
+)
 SUITE_PRESETS = {
     preset.name: preset
-    for preset in (ROBUSTNESS_V1, IDENTIFIABLE_V1, IDENTIFIABLE_FUSION_V2)
+    for preset in (
+        ROBUSTNESS_V1,
+        IDENTIFIABLE_V1,
+        IDENTIFIABLE_FUSION_V2,
+        IDENTIFIABLE_HORIZON_V5,
+    )
 }
 
 

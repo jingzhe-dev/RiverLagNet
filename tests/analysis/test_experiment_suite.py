@@ -8,6 +8,7 @@ import pytest
 from RiverLagNet.analysis.experiment_suite import (
     CONDITION_NAMES,
     IDENTIFIABLE_FUSION_V2,
+    IDENTIFIABLE_HORIZON_V5,
     IDENTIFIABLE_V1,
     ROBUSTNESS_V1,
     build_experiment_specs,
@@ -190,11 +191,21 @@ def test_identity_safe_fusion_preset_has_new_names_and_outputs() -> None:
     assert IDENTIFIABLE_FUSION_V2.summary_json.name == "identifiable_fusion_v2_summary.json"
 
 
+def test_horizon_routing_preset_has_frozen_names_and_outputs() -> None:
+    specs = build_experiment_specs([42, 43], IDENTIFIABLE_HORIZON_V5)
+
+    assert len(specs) == 18
+    assert specs[0].experiment_name == "ident_horizon_v5_s42_persistence"
+    assert "data=synthetic_identifiable_v1" in training_command(specs[0], "python")
+    assert IDENTIFIABLE_HORIZON_V5.summary_json.name == "identifiable_horizon_v5_summary.json"
+
+
 @pytest.mark.parametrize(
     ("suite_name", "experiment_prefix"),
     [
         ("identifiable_v1", "ident_v1"),
         ("identifiable_fusion_v2", "ident_fusion_v2"),
+        ("identifiable_horizon_v5", "ident_horizon_v5"),
     ],
 )
 def test_identifiable_cli_dry_run_gates_and_prints_preset_commands(
