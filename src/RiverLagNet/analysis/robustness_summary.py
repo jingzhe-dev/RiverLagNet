@@ -1,0 +1,210 @@
+"""Strict ledger-derived summaries for paired robustness experiments."""
+
+from __future__ import annotations
+
+import csv
+import json
+import statistics
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
+from .experiment_suite import ExperimentSpec, SUCCESS_STATUSES
+
+
+SUMMARY_METRICS = (
+    "val_macro_nse",
+    "val_macro_mae",
+    "val_macro_rmse",
+    "duration_s",
+    "peak_vram_gb",
+)
+ABLATION_NAMES = (
+    "no_graph",
+    "undirected_graph",
+    "shuffled_graph",
+    "no_lag",
+    "fixed_lag",
+)
+
+
+def load_successful_suite_rows(
+    path: Path, specs: Sequence[ExperimentSpec]
+) -> list[dict[str, str]]:
+    """Load exactly one successful row per expected experiment specification."""
+    expected = {spec.experiment_name: spec for spec in specs}
+    if len(expected) != len(specs):
+        raise ValueError("experiment specifications contain duplicate names")
+    selected: dict[str, dict[str, str]] = {}
+    with Path(path).open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        if reader.fieldnames is None:
+            raise ValueError("experiment ledger has no header")
+        for row in reader:
+            name = row.get("experiment", "")
+            if name not in expected or row.get("status") not in SUCCESS_STATUSES:
+                continue
+            if name in selected:
+                raise ValueError(f"duplicate successful suite row: {name}")
+            spec = expected[name]
+            try:
+                row_seed = int(row["seed"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError(f"invalid seed for suite row: {name}") from error
+            if row_seed != spec.seed:
+                raise ValueError(f"unexpected seed for suite row: {name}")
+            selected[name] = row
+    missing = sorted(set(expected) - set(selected))
+    if missing:
+        raise ValueError(f"missing successful suite rows: {', '.join(missing)}")
+    commits = {row.get("commit", "") for row in selected.values()}
+    if len(commits) != 1 or not next(iter(commits)):
+        raise ValueError("successful suite rows must share one commit")
+    return [selected[spec.experiment_name] for spec in specs]
+
+
+def _statistics(values: Sequence[float]) -> dict[str, float | int]:
+    return {
+        "count": len(values),
+        "mean": statistics.fmean(values),
+        "std": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "min": min(values),
+        "max": max(values),
+    }
+
+
+def _number(row: Mapping[str, str], metric: str) -> float:
+    try:
+        return float(row[metric])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(
+            f"suite row {row.get('experiment', '<unknown>')} has invalid {metric}"
+        ) from error
+
+
+def summarize_validation(
+    rows: Sequence[dict[str, str]], specs: Sequence[ExperimentSpec]
+) -> dict[str, object]:
+    """Calculate condition statistics and learned-lag paired deltas."""
+    if len(rows) != len(specs):
+        raise ValueError("suite rows and specifications must have equal length")
+    paired = list(zip(specs, rows, strict=True))
+    seeds = sorted({spec.seed for spec in specs})
+    commits = {row["commit"] for row in rows}
+    if len(commits) != 1:
+        raise ValueError("suite rows must share one commit")
+
+    conditions: dict[str, dict[str, dict[str, float | int]]] = {}
+    for condition_name in dict.fromkeys(spec.condition.name for spec in specs):
+        condition_rows = [row for spec, row in paired if spec.condition.name == condition_name]
+        conditions[condition_name] = {
+            metric: _statistics([_number(row, metric) for row in condition_rows])
+            for metric in SUMMARY_METRICS
+        }
+
+    nse_by_condition_seed = {
+        (spec.condition.name, spec.seed): _number(row, "val_macro_nse")
+        for spec, row in paired
+    }
+    paired_deltas: dict[str, dict[str, Any]] = {}
+    for ablation in ABLATION_NAMES:
+        seed_deltas = {
+            str(seed): nse_by_condition_seed[("learned_lag", seed)]
+            - nse_by_condition_seed[(ablation, seed)]
+            for seed in seeds
+        }
+        values = list(seed_deltas.values())
+        paired_deltas[ablation] = {
+            "mean_delta_macro_nse": statistics.fmean(values),
+            "std_delta_macro_nse": statistics.stdev(values) if len(values) > 1 else 0.0,
+            "wins": sum(value > 0.0 for value in values),
+            "seed_deltas": seed_deltas,
+        }
+    return {
+        "seeds": seeds,
+        "commit": next(iter(commits)),
+        "experiment_count": len(rows),
+        "conditions": conditions,
+        "paired_deltas": paired_deltas,
+    }
+
+
+def render_validation_markdown(summary: Mapping[str, object]) -> str:
+    """Render an answer-first technical report from a validation summary."""
+    seeds = summary["seeds"]
+    conditions = summary["conditions"]
+    deltas = summary["paired_deltas"]
+    assert isinstance(seeds, list) and isinstance(conditions, dict) and isinstance(deltas, dict)
+    lines = [
+        "# RiverLagNet multi-seed robustness and ablation report",
+        "",
+        "## Technical summary",
+        "",
+        "This report is generated from validation-selected checkpoints in the append-only experiment ledger. It tests engineering robustness on synthetic data; it is not a real-world water-quality result or a formal significance test.",
+        "",
+        "## Scope and evidence",
+        "",
+        f"- Seeds: {', '.join(str(seed) for seed in seeds)}",
+        f"- Training commit: `{summary['commit']}`",
+        f"- Successful jobs: {summary['experiment_count']}",
+        "- Selection metric: validation macro NSE",
+        "- Shared budget: maximum 50 epochs with patience-8 early stopping",
+        "",
+        "## Condition-level validation results",
+        "",
+        "| Condition | Runs | Macro NSE mean ± SD | MAE mean ± SD | RMSE mean ± SD | Duration mean (s) | Peak VRAM mean (GiB) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for name, metrics in conditions.items():
+        nse = metrics["val_macro_nse"]
+        mae = metrics["val_macro_mae"]
+        rmse = metrics["val_macro_rmse"]
+        duration = metrics["duration_s"]
+        vram = metrics["peak_vram_gb"]
+        lines.append(
+            f"| {name} | {nse['count']} | {nse['mean']:.4f} ± {nse['std']:.4f} | "
+            f"{mae['mean']:.4f} ± {mae['std']:.4f} | {rmse['mean']:.4f} ± {rmse['std']:.4f} | "
+            f"{duration['mean']:.2f} | {vram['mean']:.4f} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Paired RiverLagNet mechanism deltas",
+            "",
+            "Positive values favor the full directed learned-lag model over the named ablation on the same seed.",
+            "",
+            "| Ablation | Mean learned-minus-ablation macro NSE | Paired SD | Full-model wins | Directionally supported |",
+            "|---|---:|---:|---:|---|",
+        ]
+    )
+    for name, values in deltas.items():
+        supported = values["mean_delta_macro_nse"] > 0 and values["wins"] >= 3
+        lines.append(
+            f"| {name} | {values['mean_delta_macro_nse']:.4f} | "
+            f"{values['std_delta_macro_nse']:.4f} | {values['wins']}/{len(seeds)} | "
+            f"{'yes' if supported else 'no'} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Interpretation boundary",
+            "",
+            "The predeclared engineering rule calls a mechanism directionally supported only when the paired mean delta is positive and the full model wins at least three of five seeds. Test data are excluded from these decisions. Five seeds quantify pipeline variability but do not establish statistical significance.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_validation_summary(
+    summary: Mapping[str, object], json_path: Path, markdown_path: Path
+) -> None:
+    """Write machine-readable and technical-report views of one summary."""
+    json_path = Path(json_path)
+    markdown_path = Path(markdown_path)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    markdown_path.write_text(render_validation_markdown(summary), encoding="utf-8")

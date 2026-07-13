@@ -14,6 +14,11 @@ from RiverLagNet.analysis.experiment_suite import (
     successful_experiment_names,
     training_command,
 )
+from RiverLagNet.analysis.robustness_summary import (
+    load_successful_suite_rows,
+    summarize_validation,
+    write_validation_summary,
+)
 
 
 def main() -> None:
@@ -22,9 +27,26 @@ def main() -> None:
     parser.add_argument("--seeds", nargs="+", type=int, default=[42, 43, 44, 45, 46])
     parser.add_argument("--ledger", type=Path, default=Path("experiments/results.tsv"))
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--summarize", action="store_true")
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=Path("experiments/robustness_summary.json"),
+    )
+    parser.add_argument(
+        "--summary-markdown",
+        type=Path,
+        default=Path("docs/robustness_report_2026-07-13.md"),
+    )
     args = parser.parse_args()
 
     specs = build_experiment_specs(args.seeds)
+    if args.summarize:
+        rows = load_successful_suite_rows(args.ledger, specs)
+        summary = summarize_validation(rows, specs)
+        write_validation_summary(summary, args.summary_json, args.summary_markdown)
+        print(f"summary_json={args.summary_json} summary_markdown={args.summary_markdown}")
+        return
     successful = successful_experiment_names(args.ledger)
     pending = pending_experiment_specs(specs, successful)
     print(f"suite_total={len(specs)} successful={len(specs) - len(pending)} pending={len(pending)}")
