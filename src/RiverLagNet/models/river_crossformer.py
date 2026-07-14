@@ -47,6 +47,7 @@ class RiverGraphCrossFormer(nn.Module):
         graph_heads: int = 4,
         history_steps: int = 8,
         max_path_hops: int = 8,
+        use_target_transport: bool = False,
         dropout: float = 0.1,
         lag_prior_scale_days: float = 2.0,
         **_: object,
@@ -60,6 +61,7 @@ class RiverGraphCrossFormer(nn.Module):
         self.graph_seed = graph_seed
         self.output_window = output_window
         self.max_path_hops = max_path_hops
+        self.use_target_transport = use_target_transport
         self.input_encoder = InputMaskEncoder(
             value_dim, static_dim, time_dim, hidden_dim
         )
@@ -105,13 +107,15 @@ class RiverGraphCrossFormer(nn.Module):
         """Freeze the local Transformer and train only graph innovations."""
         for parameter in self.parameters():
             parameter.requires_grad_(False)
-        for module in (
+        trainable_modules = [
             self.history_diffusion,
             self.graph_attention,
             self.cross_fusion,
-            self.forecast_transport,
             self.upstream_decoder,
-        ):
+        ]
+        if self.use_target_transport:
+            trainable_modules.append(self.forecast_transport)
+        for module in trainable_modules:
             for parameter in module.parameters():
                 parameter.requires_grad_(True)
         with torch.no_grad():
@@ -180,15 +184,17 @@ class RiverGraphCrossFormer(nn.Module):
         graph_state, self.fusion_weights = self.cross_fusion(
             local_context, graph_heads
         )
-        target_correction = self.forecast_transport(
-            x[..., : local_prediction.shape[-1]],
-            x_mask[..., : local_prediction.shape[-1]],
-            local_prediction,
-            local_context,
-            graph_state,
-            attention_edges,
-            self.attention_weights,
-        )
+        target_correction = torch.zeros_like(local_prediction)
+        if self.use_target_transport:
+            target_correction = self.forecast_transport(
+                x[..., : local_prediction.shape[-1]],
+                x_mask[..., : local_prediction.shape[-1]],
+                local_prediction,
+                local_context,
+                graph_state,
+                attention_edges,
+                self.attention_weights,
+            )
         return (
             local_prediction
             + self.upstream_decoder(graph_state)

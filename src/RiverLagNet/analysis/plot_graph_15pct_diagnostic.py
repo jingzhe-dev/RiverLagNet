@@ -15,7 +15,7 @@ from matplotlib.patches import FancyArrowPatch
 
 
 # 可调参数：画布与导出
-FIGURE_SIZE = (12.4, 4.9)
+FIGURE_SIZE = (12.6, 5.6)
 EXPORT_DPI = 300
 # 可调参数：字体与线宽
 BASE_FONT_SIZE = 9.0
@@ -33,9 +33,12 @@ GRID_COLOR = "#DCE2E5"
 RIVER_COLOR = "#4F8797"
 HEADWATER_COLOR = "#E8EFF1"
 # 可调参数：柱宽、节点和面板留白
-BAR_HEIGHT = 0.58
+BAR_HEIGHT = 0.56
 NODE_SIZE = 18.0
-PANEL_WSPACE = 0.34
+PANEL_WSPACE = 0.30
+PATH_ARC_RADII = (-1.20, -0.55, -0.35)
+PATH_LINE_WIDTHS = (1.2, 1.5, 1.9)
+PATH_LABEL_OFFSETS = (0.055, 0.105, 0.165)
 
 
 def _relative_gain(baseline: float, graph: float) -> float:
@@ -58,6 +61,12 @@ def _load_and_validate(path: Path) -> dict[str, object]:
         expected = _relative_gain(baseline, float(row["macro_nse"]))
         if abs(expected - float(row["relative_gain_percent"])) > 1e-8:
             raise ValueError(f"mainstem gain is inconsistent for {row['name']}")
+    crossformer = payload["crossformer"]
+    crossformer_baseline = float(crossformer["no_graph_macro_nse"])
+    for row in crossformer["models"]:
+        expected = _relative_gain(crossformer_baseline, float(row["macro_nse"]))
+        if abs(expected - float(row["relative_gain_percent"])) > 1e-8:
+            raise ValueError(f"CrossFormer gain is inconsistent for {row['name']}")
     return payload
 
 
@@ -86,23 +95,27 @@ def build_figure(audit_path: Path, output_stem: Path) -> tuple[Path, Path]:
 
     full = payload["full_network"]
     mainstem = payload["mainstem"]
+    crossformer = payload["crossformer"]
     diagnostic = payload["signal_diagnostics"]
     model_rows = {row["name"]: row for row in mainstem["models"]}
+    crossformer_rows = {row["name"]: row for row in crossformer["models"]}
     labels = [
         "Full network\n8-hop graph",
         "Mainstem\nhidden trajectory",
-        "Mainstem\noutput transport",
+        "CrossFormer\ndirect-edge attention",
+        "CrossFormer\nmultiscale path attention",
+        "CrossFormer + target\ntransport fusion (discard)",
         "Train→validation\nlinear signal ceiling",
-        "Training-selected\n12-station cohort",
         "True-future\n8-hop oracle*",
     ]
     gains = np.asarray(
         [
             full["relative_gain_percent"],
             model_rows["8-hop hidden trajectory"]["relative_gain_percent"],
-            model_rows["8-hop output transport"]["relative_gain_percent"],
+            crossformer_rows["direct-edge ELHSA + TGCF"]["relative_gain_percent"],
+            crossformer_rows["MAP-LHSA + TGCF"]["relative_gain_percent"],
+            crossformer_rows["MAP-LHSA + DTGFF"]["relative_gain_percent"],
             diagnostic["deployable_train_fit_validation_eval"]["relative_gain_percent"],
-            diagnostic["training_only_selected_cohort"]["relative_gain_percent"],
             diagnostic["non_deployable_true_future_oracle"]["relative_gain_percent"],
         ],
         dtype=float,
@@ -110,8 +123,9 @@ def build_figure(audit_path: Path, output_stem: Path) -> tuple[Path, Path]:
     colors = [
         DEPLOYED_COLOR,
         DEPLOYED_COLOR,
-        NEGATIVE_COLOR,
         DIAGNOSTIC_COLOR,
+        DEPLOYED_COLOR,
+        NEGATIVE_COLOR,
         DIAGNOSTIC_COLOR,
         ORACLE_COLOR,
     ]
@@ -208,30 +222,75 @@ def build_figure(audit_path: Path, output_stem: Path) -> tuple[Path, Path]:
                 zorder=2,
             )
         )
-    bracket_start, bracket_end = 24, 32
-    bracket_y = 0.69
-    graph_axis.plot(
-        [x[bracket_start], x[bracket_end]],
-        [bracket_y, bracket_y],
+    destination_index = 40
+    source_indices = (39, 36, 32)
+    path_labels = ("1 hop", "4 hops", "8 hops")
+    path_colors = ("#86AAB3", "#4F8797", DEPLOYED_COLOR)
+    for source_index, label, color, radius, line_width, label_offset in zip(
+        source_indices,
+        path_labels,
+        path_colors,
+        PATH_ARC_RADII,
+        PATH_LINE_WIDTHS,
+        PATH_LABEL_OFFSETS,
+        strict=True,
+    ):
+        graph_axis.scatter(
+            x[source_index],
+            y_curve[source_index],
+            s=NODE_SIZE * 1.55,
+            color="white",
+            edgecolor=color,
+            linewidth=1.2,
+            zorder=6,
+        )
+        graph_axis.add_patch(
+            FancyArrowPatch(
+                (x[source_index], y_curve[source_index] + 0.012),
+                (x[destination_index], y_curve[destination_index] + 0.012),
+                arrowstyle="-|>",
+                connectionstyle=f"arc3,rad={radius}",
+                mutation_scale=9,
+                linewidth=line_width,
+                color=color,
+                zorder=5,
+            )
+        )
+        label_x = (x[source_index] + x[destination_index]) / 2
+        label_y = max(y_curve[source_index], y_curve[destination_index]) + label_offset
+        graph_axis.text(
+            label_x,
+            label_y,
+            label,
+            color=color,
+            fontsize=7.4,
+            ha="center",
+            va="bottom",
+        )
+    graph_axis.scatter(
+        x[destination_index],
+        y_curve[destination_index],
+        s=NODE_SIZE * 2.0,
+        marker="D",
         color=DEPLOYED_COLOR,
-        linewidth=1.2,
-    )
-    graph_axis.plot(
-        [x[bracket_start], x[bracket_start]],
-        [bracket_y - 0.018, bracket_y + 0.018],
-        color=DEPLOYED_COLOR,
-        linewidth=1.2,
-    )
-    graph_axis.plot(
-        [x[bracket_end], x[bracket_end]],
-        [bracket_y - 0.018, bracket_y + 0.018],
-        color=DEPLOYED_COLOR,
-        linewidth=1.2,
+        edgecolor="white",
+        linewidth=0.8,
+        zorder=7,
     )
     graph_axis.text(
-        (x[bracket_start] + x[bracket_end]) / 2,
-        bracket_y + 0.035,
-        "8-hop message reach",
+        x[destination_index],
+        y_curve[destination_index] - 0.075,
+        "target station",
+        ha="center",
+        va="top",
+        color=DEPLOYED_COLOR,
+        fontsize=7.5,
+        fontweight="bold",
+    )
+    graph_axis.text(
+        (x[source_indices[-1]] + x[destination_index]) / 2,
+        0.765,
+        "direct and distant ancestors compete in one attention operation",
         ha="center",
         va="bottom",
         color=DEPLOYED_COLOR,
@@ -279,7 +338,7 @@ def build_figure(audit_path: Path, output_stem: Path) -> tuple[Path, Path]:
     graph_axis.text(
         0.5,
         0.305,
-        "information flow",
+        "upstream → downstream information flow",
         transform=graph_axis.transAxes,
         ha="center",
         va="bottom",
@@ -290,7 +349,7 @@ def build_figure(audit_path: Path, output_stem: Path) -> tuple[Path, Path]:
     graph_axis.set_ylim(0.12, 0.84)
     graph_axis.axis("off")
     graph_axis.set_title(
-        "Topology-only mainstem used for the controlled test",
+        "Multiscale upstream paths on the 61-station mainstem",
         loc="left",
         pad=12,
         fontsize=10.4,
@@ -314,7 +373,7 @@ def build_figure(audit_path: Path, output_stem: Path) -> tuple[Path, Path]:
         fontweight="bold",
     )
     figure.suptitle(
-        "River-network information does not support a deployable 15% NSE gain",
+        "Attention design improves graph use, but not to the required 15% NSE gain",
         x=0.055,
         y=0.975,
         ha="left",

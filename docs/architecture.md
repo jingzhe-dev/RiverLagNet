@@ -227,6 +227,13 @@ the latent-to-target mismatch and avoids forcing NH3N, CODMn, and TP to use
 the same routing-head mixture. Missing historical targets are masked before
 path-lag renormalization; no future observation or future target is read.
 
+The controlled seed-42 validation experiment found that enabling TCFT reduced
+macro NSE from the MAP-LHSA + TGCF result `0.588823` to `0.584569` while
+increasing runtime. TCFT is therefore retained only as the reproducible
+`use_target_transport=true` discard ablation and is disabled by default. The
+selected fusion innovation remains TGCF; the negative target-space result is
+not presented as a model improvement.
+
 Together, CMLHD + MAP-LHSA + DTGFF form a specific solution to the project
 question: preserve transient upstream covariates before temporal compression,
 select physically admissible edge-lag routes for each prediction lead, and

@@ -41,6 +41,36 @@
       }
     ]
   },
+  "crossformer": {
+    "dataset_id": "china-real-daily-mainstem-61-extended-v0.1",
+    "no_graph_experiment": "realmain61ext_crossformer_v24_s42_nograph",
+    "no_graph_macro_nse": 0.5842012166976929,
+    "target_relative_gain_percent": 15.0,
+    "target_macro_nse": 0.6718313992023468,
+    "models": [
+      {
+        "name": "direct-edge ELHSA + TGCF",
+        "experiment": "realmain61ext_crossformer_v24_s42_graph",
+        "macro_nse": 0.5870601534843445,
+        "relative_gain_percent": 0.4893753564589079,
+        "decision": "superseded"
+      },
+      {
+        "name": "MAP-LHSA + TGCF",
+        "experiment": "realmain61ext_crossformer_v27_s42_multiscale_graph",
+        "macro_nse": 0.5888225436210632,
+        "relative_gain_percent": 0.7910505475310853,
+        "decision": "keep_attention_innovation"
+      },
+      {
+        "name": "MAP-LHSA + DTGFF",
+        "experiment": "realmain61ext_crossformer_v28_s42_target_transport_graph",
+        "macro_nse": 0.584568977355957,
+        "relative_gain_percent": 0.06295102573442013,
+        "decision": "discard_target_transport"
+      }
+    ]
+  },
   "signal_diagnostics": {
     "deployable_train_fit_validation_eval": {
       "method": "per-node, horizon, and target ridge correction from travel-time-aligned upstream history or upstream local forecasts; fit on chronological training windows and evaluated on validation windows",

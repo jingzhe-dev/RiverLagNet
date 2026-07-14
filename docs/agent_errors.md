@@ -89,3 +89,4 @@
 - 2026-07-15｜目标条件化融合首次 GPU bf16 smoke 在 `index_add_` 发生类型冲突｜CPU 单测只覆盖 float32，目标头 softmax 和历史候选未显式继承预测 dtype｜将路由头权重及候选转换为预测 dtype 并增加 bf16 回归测试｜新融合模块必须在提交前同时覆盖 float32 单测与真实 AMP smoke
 - 2026-07-15｜目标条件化融合第二次 GPU smoke 仍发生相同类型冲突｜首轮修复只转换目标头权重，且回归测试错误假设 attention 也为 bf16，遗漏 AMP 下稀疏 attention 保持 float32 的真实组合｜将目标权重聚合结果统一转换为预测 dtype，并用 float32 attention 加 bf16 预测回归｜混合精度测试必须复现模块边界两侧可能不同的实际 dtype，不能只测试全模块单一 dtype
 - 2026-07-15｜目标条件化融合第三次 GPU smoke 仍在归一化累加处类型冲突｜第二轮修复仍让累加器继承预测 dtype，忽略 autocast 可让归一化求和保留 float32｜分子和分母累加器改为继承对应聚合 source dtype，聚合完成后才转换到解码 dtype｜`index_add_` 等原位归约的目标张量必须直接从 source 张量创建，不能从相邻模块输出推断 dtype
+- 2026-07-15｜查找最新结果绘图入口时把不存在的 `scripts` 目录传给 `rg`｜没有先用 `rg --files` 确认仓库顶层目录就沿用常见项目结构假设｜改为只读取已枚举的 `src/RiverLagNet/analysis` 绘图模块｜检索命令的路径参数必须来自当前仓库文件清单，禁止附加猜测目录
