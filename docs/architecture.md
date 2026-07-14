@@ -94,6 +94,15 @@ early-stopping metric. Channels with no observations or zero target variance
 are excluded from macro NSE. `RiverDataModule` supplies all models with
 identical split and batching behavior.
 
+An optional two-stage attribution experiment warm-starts a full RiverLagNet
+from a validation-selected `no_graph` checkpoint, freezes the input encoder,
+temporal GRU, and local decoder, and zero-initializes the target-specific
+upstream output heads. The directed model therefore starts with predictions
+exactly equal to the local checkpoint. During the second stage only the
+message-passing, fusion, and upstream residual decoder are optimized. This
+does not make routing weights causal, but it prevents apparent graph gains
+from being produced by a changed local backbone or by headwater nodes.
+
 CSV and TensorBoard loggers, learning-rate monitoring, checkpointing, early stopping, gradient clipping, deterministic seeds, timing, peak CUDA memory, CPU fallback, and `fast_dev_run` are configured through Lightning and Hydra.
 
 Attention weights indicate learned routing preference only. They are not causal effect estimates.

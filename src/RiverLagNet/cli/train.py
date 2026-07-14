@@ -15,6 +15,7 @@ from lightning.pytorch.loggers import CSVLogger, TensorBoardLogger
 from omegaconf import DictConfig, OmegaConf
 
 from RiverLagNet.data.datamodule import RiverDataModule
+from RiverLagNet.models.riverlag_net import RiverLagNet
 from RiverLagNet.training.callbacks import RuntimeStatsCallback
 from RiverLagNet.training.experiment_log import ExperimentRecord, append_experiment_record
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
@@ -36,6 +37,17 @@ def _metric_float(metrics: dict[str, Any], name: str) -> float:
         raise KeyError(f"validation did not produce required metric: {name}")
     value = metrics[name]
     return float(value.detach().cpu()) if isinstance(value, torch.Tensor) else float(value)
+
+
+def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None:
+    """Load a trusted local Lightning checkpoint before residual training."""
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"warm-start checkpoint not found: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    state_dict = checkpoint.get("state_dict")
+    if not isinstance(state_dict, dict):
+        raise ValueError("warm-start checkpoint does not contain a Lightning state_dict")
+    module.load_state_dict(state_dict, strict=True)
 
 
 def _experiment_record(
@@ -92,6 +104,16 @@ def run(cfg: DictConfig) -> dict[str, Any]:
         target_mean=datamodule.scaler.mean[:3].tolist(),
         target_scale=datamodule.scaler.scale[:3].tolist(),
     )
+    if cfg.trainer.warm_start_checkpoint:
+        _load_warm_start(module, Path(str(cfg.trainer.warm_start_checkpoint)))
+    if bool(cfg.trainer.upstream_residual_only):
+        if not isinstance(model, RiverLagNet):
+            raise ValueError("upstream_residual_only requires model=riverlagnet")
+        if not cfg.trainer.warm_start_checkpoint:
+            raise ValueError("upstream_residual_only requires warm_start_checkpoint")
+        model.configure_upstream_residual_training(
+            gate_bias=float(cfg.trainer.upstream_gate_bias)
+        )
     run_dir = Path(str(cfg.run_dir))
     runtime = RuntimeStatsCallback()
     callbacks = [runtime, LearningRateMonitor(logging_interval="epoch")]

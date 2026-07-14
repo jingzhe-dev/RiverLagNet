@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import torch
 from torch import Tensor, nn
 
 from RiverLagNet.data.graph_builder import build_graph_variant
@@ -55,6 +56,24 @@ class RiverLagNet(nn.Module):
         self.decoder = MultiHorizonMultiTargetDecoder(hidden_dim, output_window, target_dim)
         self.upstream_decoder = UpstreamResidualDecoder(hidden_dim, target_dim)
         self.attention_weights: Tensor | None = None
+
+    def configure_upstream_residual_training(self, gate_bias: float = -1.0) -> None:
+        """Freeze the local forecaster and zero-start the upstream correction.
+
+        The directed model initially reproduces its warm-started local
+        prediction exactly. Only the message-passing, fusion, and upstream
+        decoder parameters remain trainable, so any validation improvement is
+        attributable to the upstream residual branch rather than a changed
+        local backbone.
+        """
+        for module in (self.input_encoder, self.temporal_encoder, self.decoder):
+            for parameter in module.parameters():
+                parameter.requires_grad_(False)
+        with torch.no_grad():
+            self.fusion.gate.weight.zero_()
+            self.fusion.gate.bias.fill_(gate_bias)
+            for head in self.upstream_decoder.heads:
+                head.weight.zero_()
 
     def forward(
         self,
