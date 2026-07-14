@@ -13,3 +13,4 @@ lag_bias_mode: none
 horizon_gate_mode: none
 propagation_mode: legacy
 trajectory_steps: 4
+topology_mode: none

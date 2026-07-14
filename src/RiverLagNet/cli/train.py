@@ -60,6 +60,7 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
         for name in incompatible.missing_keys
         if name not in allowed_missing
         and not name.startswith("model.trajectory_propagation.")
+        and not name.startswith("model.topology_encoder.")
     }
     if unexpected_missing or incompatible.unexpected_keys:
         raise ValueError(

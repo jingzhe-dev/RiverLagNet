@@ -232,3 +232,51 @@ def test_trajectory_mode_preserves_output_shape_and_headwater_prediction() -> No
 
     assert graph_output.shape == (2, 6, 4, 3)
     assert torch.equal(graph_output[:, :, 0], local_output[:, :, 0])
+
+
+def test_structural_topology_mode_zero_starts_without_changing_predictions() -> None:
+    torch.manual_seed(31)
+    base = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=4,
+        graph_variant="directed",
+        lag_mode="no_lag",
+        propagation_mode="trajectory",
+        trajectory_steps=2,
+        topology_mode="none",
+    ).eval()
+    structural = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=4,
+        graph_variant="directed",
+        lag_mode="no_lag",
+        propagation_mode="trajectory",
+        trajectory_steps=2,
+        topology_mode="structural",
+    ).eval()
+    incompatible = structural.load_state_dict(base.state_dict(), strict=False)
+    assert incompatible.unexpected_keys == []
+    assert all(key.startswith("topology_encoder.") for key in incompatible.missing_keys)
+    inputs = {
+        "x": torch.randn(2, 8, 4, 3),
+        "x_mask": torch.ones(2, 8, 4, 3, dtype=torch.bool),
+        "x_quality": torch.ones(2, 8, 4, 3),
+        "static": torch.randn(4, 2),
+        "edge_index": torch.tensor([[0, 1, 1], [1, 2, 3]]),
+        "edge_attr": torch.tensor(
+            [[4.0, 0.1, 1.0], [3.0, 0.2, 2.0], [2.0, 0.3, 1.0]]
+        ),
+        "time_features": torch.randn(2, 8, 4),
+    }
+
+    assert torch.equal(structural(**inputs), base(**inputs))

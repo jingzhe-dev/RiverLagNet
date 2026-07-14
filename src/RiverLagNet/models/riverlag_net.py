@@ -12,6 +12,7 @@ from .fusion import BoundedLinearHorizonGate, LocalUpstreamGatedFusion
 from .input_encoder import InputMaskEncoder
 from .lag_message_passing import DirectedLagAwareMessagePassing
 from .temporal_gru import NodeTemporalGRU
+from .topology_encoder import DirectedTopologyEncoder
 from .trajectory_propagation import DirectedTrajectoryPropagation
 
 
@@ -39,6 +40,7 @@ class RiverLagNet(nn.Module):
         horizon_gate_mode: str = "none",
         propagation_mode: str = "legacy",
         trajectory_steps: int = 4,
+        topology_mode: str = "none",
         **_: object,
     ) -> None:
         super().__init__()
@@ -48,11 +50,14 @@ class RiverLagNet(nn.Module):
             raise ValueError("horizon_gate_mode must be none or linear")
         if propagation_mode not in {"legacy", "trajectory"}:
             raise ValueError("propagation_mode must be legacy or trajectory")
+        if topology_mode not in {"none", "structural"}:
+            raise ValueError("topology_mode must be none or structural")
         self.graph_variant = graph_variant
         self.graph_seed = graph_seed
         self.output_window = output_window
         self.horizon_gate_mode = horizon_gate_mode
         self.propagation_mode = propagation_mode
+        self.topology_mode = topology_mode
         self._horizon_calibration_only = False
         self._lag_refinement_only = False
         self.input_encoder = InputMaskEncoder(value_dim, static_dim, time_dim, hidden_dim)
@@ -85,6 +90,11 @@ class RiverLagNet(nn.Module):
                 dropout=dropout,
             )
             if propagation_mode == "trajectory"
+            else None
+        )
+        self.topology_encoder = (
+            DirectedTopologyEncoder(hidden_dim)
+            if topology_mode == "structural"
             else None
         )
         self.attention_weights: Tensor | None = None
@@ -162,6 +172,10 @@ class RiverLagNet(nn.Module):
         """Return `y_hat [B,T_out,N,3]`."""
         encoded = self.input_encoder(x, x_mask, x_quality, static, time_features)
         h_seq, h_local = self.temporal_encoder(encoded)
+        if self.graph_variant != "no_graph" and self.topology_encoder is not None:
+            topology = self.topology_encoder(edge_index, edge_attr, h_local.shape[1])
+            h_seq = h_seq + topology[None, None]
+            h_local = h_local + topology[None]
         local_context = self.decoder.contextualize(h_local)
         local_prediction = self.decoder.decode_context(local_context)
         if self.graph_variant == "no_graph":
