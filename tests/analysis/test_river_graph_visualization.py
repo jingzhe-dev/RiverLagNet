@@ -4,6 +4,7 @@ import numpy as np
 import polars as pl
 
 from RiverLagNet.analysis.river_graph_visualization import (
+    _large_graph_positions,
     build_river_graph_summary,
     render_river_graph_figure,
 )
@@ -52,6 +53,13 @@ def test_graph_summary_preserves_direction_roles_and_prior_lags(tmp_path: Path) 
     assert summary["edge_count"] == 2
     assert summary["component_count"] == 1
     assert summary["rounded_prior_lag_counts"] == {"0": 1, "1": 1}
+    assert summary["prior_lag_bin_counts"] == {
+        "<1 d": 2,
+        "1–3 d": 0,
+        "3–7 d": 0,
+        "7–14 d": 0,
+        ">14 d": 0,
+    }
     assert [
         (edge["src_station_id"], edge["dst_station_id"])
         for edge in summary["edges"]
@@ -60,6 +68,17 @@ def test_graph_summary_preserves_direction_roles_and_prior_lags(tmp_path: Path) 
     assert roles == {"100": "headwater", "200": "internal", "300": "outlet"}
     review = {node["node_id"]: node["mapping_review"] for node in summary["nodes"]}
     assert review == {"100": False, "200": True, "300": False}
+
+
+def test_large_graph_layout_places_every_edge_upstream_to_downstream() -> None:
+    node_ids = ["1", "2", "3", "4", "5"]
+    edges = [("1", "3"), ("2", "3"), ("3", "5"), ("4", "5")]
+
+    positions = _large_graph_positions(node_ids, edges)
+
+    assert set(positions) == set(node_ids)
+    assert all(positions[source][0] < positions[destination][0] for source, destination in edges)
+    assert all(0.0 < x < 1.0 and 0.0 < y < 1.0 for x, y in positions.values())
 
 
 def test_graph_visualization_writes_png_and_pdf(tmp_path: Path) -> None:

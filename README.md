@@ -45,11 +45,38 @@ conda run -n DeepWater python -m RiverLagNet.cli.prepare_real_data `
 
 The generated manifest contains source and artifact SHA256 values, exact split dates, observation coverage, aggregation semantics, edge direction, and the travel-time prior assumption. See the [real-data audit](docs/data/china-real-daily-audit-2026-07-14.md).
 
+The preferred formal pilot now contracts HydroRIVERS paths across unmonitored reaches instead of retaining only directly adjacent monitored reaches:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.prepare_contracted_real_data `
+  --dynamic-path "D:\05.Paper\06.第六篇论文\03.Code\数据填补\output\imputed_water_quality.csv" `
+  --flags-path "D:\05.Paper\06.第六篇论文\03.Code\数据填补\output\imputed_water_quality_flags.csv" `
+  --mapping-path "D:\05.Paper\07.第七篇论文\Code\data\processed\hydrowq-v0.1\china_bootstrap\station_mapping_hydrorivers.csv" `
+  --hydrorivers-zip "D:\05.Paper\07.第七篇论文\Code\data\raw\hydrosheds\hydrorivers\HydroRIVERS_v10_as_shp.zip"
+```
+
+The resulting `china-real-daily-contracted-v0.2` artifact has 238 nodes, 237 directed edges, and complete original-observation coverage for all three targets in the selected component. See the [contracted graph and training audit](docs/data/china-real-daily-contracted-audit-2026-07-14.md).
+
 Run the fixed real-data training configurations with:
 
 ```powershell
 conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily model=station_gru trainer=formal_gpu experiment=china_real_daily
 conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily model=riverlagnet trainer=formal_gpu experiment=china_real_daily
+```
+
+For the contracted artifact, replace both overrides with `data=china_real_daily_contracted experiment=china_real_daily_contracted`.
+
+## Contracted real-data seed-42 benchmark
+
+Persistence, Station GRU, Static Directed GAT, and RiverLagNet completed the same validation-only formal protocol on the 238-node contracted graph. Validation macro NSE was `0.2257`, `0.5129`, `0.5161`, and `0.5135`, respectively. RiverLagNet was `+0.0007` versus Station GRU and `-0.0025` versus Static Directed GAT; this single-seed result does not establish a stable learned-lag advantage. The held-out test set has not been used.
+
+![Contracted seed-42 validation metrics](docs/figures/china_real_daily_contracted_seed42_metrics.png)
+
+The next registered suite is resumable and pairs `no_lag`, `fixed_lag`, and `learned_lag` across seeds 42–46:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_contracted_lag_v2
+conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_contracted_lag_v2 --summarize
 ```
 
 ## Train

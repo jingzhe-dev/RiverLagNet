@@ -74,6 +74,8 @@ node_ids:               [N] monitored segment IDs
 source_station_count:   [N]
 ```
 
+`prepare_china_contracted_real_daily` is the preferred graph-construction path for the formal real-data pilot. It follows HydroRIVERS `NEXT_DOWN` through unmonitored reaches and connects each selected monitored reach to its first selected downstream reach. Edge attributes contain standardized accumulated path length, hop count, source/destination stream order, and the raw `travel_time_prior_days` as the final channel. The coverage profile and contracted-graph construction report are stored next to the ignored prepared dataset.
+
 Source values flagged `*_is_imputed=1` become null in `observations.parquet`, zero plus `observed=false` in `dataset.npz`, and never enter scaler fitting, loss, or metrics. The first edge features retain their source z-scores; the final feature is an explicit `travel_time_prior_days` derived from restored river length and the manifest-declared velocity assumption. This prior is a routing regularizer, not evidence of causality or measured travel time.
 
 ## Synthetic data

@@ -50,7 +50,7 @@ def _write_real_sources(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
 
     data_root = tmp_path / "hydrowq-v0.1"
     graph_root = data_root / "fixtures" / "river_graph"
-    component = graph_root / "component-01-v0.1"
+    component = graph_root / "component-01-v0.2"
     component.mkdir(parents=True)
     np.savez_compressed(
         component / "graph.npz",
@@ -95,7 +95,13 @@ def test_real_daily_preparation_excludes_imputed_values_and_preserves_direction(
     tmp_path: Path,
 ) -> None:
     sources = _write_real_sources(tmp_path)
-    summary = prepare_china_real_daily(*sources, travel_speed_km_per_day=11.0, hash_sources=False)
+    summary = prepare_china_real_daily(
+        *sources,
+        travel_speed_km_per_day=11.0,
+        hash_sources=False,
+        dataset_id="test-contracted-v0.2",
+        graph_construction={"construction": "test_path_contraction"},
+    )
     data = load_real_daily_dataset(summary.dataset_path)
 
     assert (summary.num_days, summary.num_nodes, summary.num_edges) == (20, 2, 1)
@@ -107,6 +113,11 @@ def test_real_daily_preparation_excludes_imputed_values_and_preserves_direction(
     assert data.quality[0, 0, 0].item() == 0.5
     assert not data.observed[1, 0].any()
     assert torch.equal(data.values[1, 0], torch.zeros(3))
+    manifest = json.loads(summary.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["dataset_id"] == "test-contracted-v0.2"
+    assert manifest["graph_construction"]["construction"] == "test_path_contraction"
+    with np.load(summary.dataset_path) as archive:
+        assert archive["component_ids"].tolist() == ["component-01", "component-01"]
 
     review = pl.read_parquet(summary.observations_path).filter(
         (pl.col("date") == date(2020, 1, 2)) & (pl.col("station_id") == "100")

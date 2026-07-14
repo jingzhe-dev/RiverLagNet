@@ -243,6 +243,26 @@ def test_real_lag_preset_limits_matrix_and_uses_formal_real_data_config() -> Non
     assert REAL_LAG_V1.graph_figure_png is not None
 
 
+def test_contracted_real_lag_preset_is_ready_for_paired_formal_runs() -> None:
+    from RiverLagNet.analysis.experiment_suite import REAL_CONTRACTED_LAG_V2
+
+    specs = build_experiment_specs([42, 43], REAL_CONTRACTED_LAG_V2)
+
+    assert len(specs) == 6
+    assert {spec.condition.name for spec in specs} == {
+        "no_lag",
+        "fixed_lag",
+        "learned_lag",
+    }
+    command = training_command(specs[0], "python")
+    assert "data=china_real_daily_contracted" in command
+    assert "trainer=formal_gpu" in command
+    assert "experiment=china_real_daily_contracted" in command
+    assert REAL_CONTRACTED_LAG_V2.graph_data_root == Path(
+        "data/processed/china-real-daily-contracted-v0.2"
+    )
+
+
 @pytest.mark.parametrize(
     ("suite_name", "experiment_prefix"),
     [

@@ -81,6 +81,30 @@ REVIEW_COLOR = "#B23A3A"
 TEXT_COLOR = "#252A2E"
 MUTED_TEXT_COLOR = "#667078"
 
+# 可调参数：大规模收缩河网布局（上游在左、下游在右）
+LARGE_GRAPH_NODE_THRESHOLD = 80
+LARGE_FIGURE_SIZE = (15.2, 8.6)
+LARGE_NETWORK_RECT = (0.035, 0.12, 0.735, 0.76)
+LARGE_STATS_RECT = (0.805, 0.53, 0.17, 0.31)
+LARGE_LAG_RECT = (0.805, 0.16, 0.17, 0.27)
+LARGE_NODE_SIZE = 13.0
+LARGE_HEADWATER_SIZE = 21.0
+LARGE_OUTLET_SIZE = 70.0
+LARGE_EDGE_WIDTH = 0.72
+LARGE_ARROW_SCALE = 5.8
+LARGE_X_MARGIN = 0.025
+LARGE_Y_MARGIN = 0.018
+LARGE_LABEL_SIZE = 7.2
+
+# 可调参数：时滞区间使用单一蓝色根系；超过模型上限的边用橙色虚线警示
+LAG_BIN_SPECS = (
+    ("<1 d", 0.0, 1.0, "#C9D9E2"),
+    ("1–3 d", 1.0, 3.0, "#8FB2C4"),
+    ("3–7 d", 3.0, 7.0, "#4E819D"),
+    ("7–14 d", 7.0, 14.0, "#255A78"),
+    (">14 d", 14.0, float("inf"), "#C47A2C"),
+)
+
 
 def _finite(value: Any, label: str) -> float:
     try:
@@ -90,6 +114,16 @@ def _finite(value: Any, label: str) -> float:
     if not math.isfinite(number):
         raise ValueError(f"non-finite graph value for {label}")
     return number
+
+
+def _lag_bin(prior_days: float) -> tuple[str, str]:
+    """Return the declared label and color for one travel-time prior."""
+    for label, lower, upper, color in LAG_BIN_SPECS:
+        if lower <= prior_days < upper or (
+            math.isinf(upper) and prior_days >= lower
+        ):
+            return label, color
+    raise ValueError(f"travel-time prior must be non-negative, found {prior_days}")
 
 
 def _topological_depths(node_ids: list[str], edges: list[tuple[str, str]]) -> dict[str, int]:
@@ -120,6 +154,7 @@ def build_river_graph_summary(data_root: Path) -> dict[str, object]:
     dataset_path = data_root / "dataset.npz"
     mapping_path = data_root / "station_mapping.parquet"
     edges_path = data_root / "edges.parquet"
+    manifest_path = data_root / "manifest.json"
     if not all(path.is_file() for path in (dataset_path, mapping_path, edges_path)):
         raise FileNotFoundError(f"prepared graph assets are incomplete: {data_root}")
     with np.load(dataset_path, allow_pickle=False) as archive:
@@ -276,6 +311,18 @@ def build_river_graph_summary(data_root: Path) -> dict[str, object]:
         )
 
     prior_counts = Counter(int(edge["rounded_prior_lag_days"]) for edge in edges)
+    lag_bin_counts = Counter(
+        _lag_bin(float(edge["travel_time_prior_days"]))[0] for edge in edges
+    )
+    prior_values = np.asarray(
+        [float(edge["travel_time_prior_days"]) for edge in edges], dtype=np.float64
+    )
+    graph_construction: dict[str, object] | None = None
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        candidate = manifest.get("graph_construction")
+        if isinstance(candidate, dict):
+            graph_construction = candidate
     return {
         "direction": "upstream_to_downstream",
         "node_definition": "monitored HydroRIVERS segment",
@@ -290,6 +337,17 @@ def build_river_graph_summary(data_root: Path) -> dict[str, object]:
         "rounded_prior_lag_counts": {
             str(lag): count for lag, count in sorted(prior_counts.items())
         },
+        "prior_lag_bin_counts": {
+            label: lag_bin_counts.get(label, 0)
+            for label, _, _, _ in LAG_BIN_SPECS
+        },
+        "travel_time_prior_days": {
+            "min": float(prior_values.min()) if prior_values.size else 0.0,
+            "median": float(np.median(prior_values)) if prior_values.size else 0.0,
+            "p90": float(np.quantile(prior_values, 0.9)) if prior_values.size else 0.0,
+            "max": float(prior_values.max()) if prior_values.size else 0.0,
+        },
+        "graph_construction": graph_construction,
         "nodes": nodes,
         "edges": edges,
         "components": components,
@@ -469,6 +527,362 @@ def _component_card(
     axis.axis("off")
 
 
+def _large_graph_positions(
+    node_ids: list[str], edges: list[tuple[str, str]]
+) -> dict[str, tuple[float, float]]:
+    """Lay out an in-arborescence with upstream leaves left and outlet right."""
+    depths = _topological_depths(node_ids, edges)
+    maximum_depth = max(depths.values(), default=0)
+    upstream = {node_id: [] for node_id in node_ids}
+    downstream = {node_id: [] for node_id in node_ids}
+    for source, destination in edges:
+        upstream[destination].append(source)
+        downstream[source].append(destination)
+    outlets = sorted(node_id for node_id in node_ids if not downstream[node_id])
+    leaf_order: dict[str, float] = {}
+    cursor = 0
+
+    def assign_vertical(node_id: str) -> float:
+        nonlocal cursor
+        parents = sorted(upstream[node_id])
+        if not parents:
+            value = float(cursor)
+            cursor += 1
+        else:
+            value = float(np.mean([assign_vertical(parent) for parent in parents]))
+        leaf_order[node_id] = value
+        return value
+
+    for outlet in outlets:
+        assign_vertical(outlet)
+        cursor += 1
+    if set(leaf_order) != set(node_ids):
+        raise ValueError("large-graph layout did not visit every node")
+    minimum_y = min(leaf_order.values(), default=0.0)
+    maximum_y = max(leaf_order.values(), default=0.0)
+    y_span = maximum_y - minimum_y
+    positions: dict[str, tuple[float, float]] = {}
+    for node_id in node_ids:
+        x_position = (
+            0.5
+            if maximum_depth == 0
+            else LARGE_X_MARGIN
+            + (1.0 - 2.0 * LARGE_X_MARGIN) * depths[node_id] / maximum_depth
+        )
+        y_position = (
+            0.5
+            if y_span == 0
+            else LARGE_Y_MARGIN
+            + (1.0 - 2.0 * LARGE_Y_MARGIN)
+            * (leaf_order[node_id] - minimum_y)
+            / y_span
+        )
+        positions[node_id] = (x_position, y_position)
+    return positions
+
+
+def _large_network_legend_handles() -> list[Line2D]:
+    return [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markerfacecolor=ROLE_COLORS[role],
+            markeredgecolor="white",
+            markersize=size,
+            label=label,
+        )
+        for role, size, label in (
+            ("headwater", 5.0, "Headwater segment"),
+            ("internal", 4.2, "Internal segment"),
+            ("outlet", 7.0, "Outlet segment"),
+        )
+    ] + [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markerfacecolor="none",
+            markeredgecolor=REVIEW_COLOR,
+            markersize=6.5,
+            label="Mapping review",
+        )
+    ]
+
+
+def _render_large_graph_figure(
+    summary: Mapping[str, Any], png_path: Path, pdf_path: Path
+) -> tuple[Path, Path]:
+    """Render a dense contracted river tree and its travel-time distribution."""
+    nodes = list(summary["nodes"])
+    edges = list(summary["edges"])
+    node_ids = [str(node["node_id"]) for node in nodes]
+    edge_pairs = [
+        (str(edge["src_station_id"]), str(edge["dst_station_id"]))
+        for edge in edges
+    ]
+    positions = _large_graph_positions(node_ids, edge_pairs)
+    node_by_id = {str(node["node_id"]): node for node in nodes}
+    figure = plt.figure(figsize=LARGE_FIGURE_SIZE, facecolor="white")
+    network_axis = figure.add_axes(LARGE_NETWORK_RECT)
+    stats_axis = figure.add_axes(LARGE_STATS_RECT)
+    lag_axis = figure.add_axes(LARGE_LAG_RECT)
+
+    for edge in edges:
+        source = str(edge["src_station_id"])
+        destination = str(edge["dst_station_id"])
+        prior_days = float(edge["travel_time_prior_days"])
+        _, color = _lag_bin(prior_days)
+        network_axis.add_patch(
+            FancyArrowPatch(
+                positions[source],
+                positions[destination],
+                arrowstyle="-|>",
+                mutation_scale=LARGE_ARROW_SCALE,
+                linewidth=LARGE_EDGE_WIDTH,
+                linestyle="--" if prior_days > 14.0 else "-",
+                color=color,
+                alpha=0.78,
+                shrinkA=0.8,
+                shrinkB=1.2,
+                zorder=1,
+            )
+        )
+
+    for role, size in (
+        ("headwater", LARGE_HEADWATER_SIZE),
+        ("internal", LARGE_NODE_SIZE),
+        ("outlet", LARGE_OUTLET_SIZE),
+    ):
+        role_ids = [node_id for node_id in node_ids if node_by_id[node_id]["role"] == role]
+        if not role_ids:
+            continue
+        network_axis.scatter(
+            [positions[node_id][0] for node_id in role_ids],
+            [positions[node_id][1] for node_id in role_ids],
+            s=size,
+            facecolor=ROLE_COLORS[role],
+            edgecolor="white",
+            linewidth=0.45,
+            zorder=3,
+        )
+    review_ids = [
+        node_id for node_id in node_ids if bool(node_by_id[node_id]["mapping_review"])
+    ]
+    if review_ids:
+        network_axis.scatter(
+            [positions[node_id][0] for node_id in review_ids],
+            [positions[node_id][1] for node_id in review_ids],
+            s=LARGE_HEADWATER_SIZE + 20.0,
+            facecolor="none",
+            edgecolor=REVIEW_COLOR,
+            linewidth=0.75,
+            zorder=4,
+        )
+    for node_id in node_ids:
+        if node_by_id[node_id]["role"] == "outlet":
+            x_position, y_position = positions[node_id]
+            network_axis.text(
+                x_position - 0.008,
+                y_position - 0.025,
+                f"Outlet\n{node_id}",
+                fontsize=LARGE_LABEL_SIZE,
+                fontweight="bold",
+                color=TEXT_COLOR,
+                ha="right",
+                va="top",
+            )
+
+    network_axis.annotate(
+        "",
+        xy=(0.96, 0.985),
+        xytext=(0.72, 0.985),
+        xycoords="axes fraction",
+        arrowprops={"arrowstyle": "-|>", "color": TEXT_COLOR, "linewidth": 1.0},
+        annotation_clip=False,
+    )
+    network_axis.text(
+        0.70,
+        0.985,
+        "UPSTREAM",
+        transform=network_axis.transAxes,
+        fontsize=DIRECTION_LABEL_SIZE,
+        fontweight="bold",
+        ha="right",
+        va="center",
+    )
+    network_axis.text(
+        0.98,
+        0.985,
+        "DOWNSTREAM",
+        transform=network_axis.transAxes,
+        fontsize=DIRECTION_LABEL_SIZE,
+        fontweight="bold",
+        ha="left",
+        va="center",
+    )
+    network_axis.legend(
+        handles=_large_network_legend_handles(),
+        loc="lower left",
+        bbox_to_anchor=(0.0, -0.105),
+        ncol=4,
+        frameon=False,
+        fontsize=LEGEND_SIZE,
+        handletextpad=0.5,
+        columnspacing=1.1,
+    )
+    network_axis.set_xlim(0.0, 1.0)
+    network_axis.set_ylim(0.0, 1.0)
+    network_axis.axis("off")
+
+    headwater_count = sum(node["role"] == "headwater" for node in nodes)
+    review_count = sum(bool(node["mapping_review"]) for node in nodes)
+    source_station_count = sum(int(node["source_station_count"]) for node in nodes)
+    prior_summary = summary.get("travel_time_prior_days", {})
+    components = list(summary["components"])
+    maximum_depth = max(int(component["topological_depth"]) for component in components)
+    above_max_lag = sum(float(edge["travel_time_prior_days"]) > 14.0 for edge in edges)
+    stats_axis.text(
+        0.0,
+        1.0,
+        "Network audit",
+        fontsize=11.0,
+        fontweight="bold",
+        color=TEXT_COLOR,
+        ha="left",
+        va="top",
+    )
+    stats_axis.text(
+        0.0,
+        0.86,
+        (
+            f"{len(nodes)} monitored segments\n"
+            f"{len(edges)} contracted directed edges\n"
+            f"{source_station_count} source stations\n"
+            f"{headwater_count} headwaters · depth {maximum_depth}\n"
+            f"{review_count} mapping-review segments"
+        ),
+        fontsize=9.0,
+        color=TEXT_COLOR,
+        ha="left",
+        va="top",
+        linespacing=1.55,
+    )
+    stats_axis.text(
+        0.0,
+        0.42,
+        "Travel-time prior",
+        fontsize=9.2,
+        fontweight="bold",
+        color=TEXT_COLOR,
+        ha="left",
+        va="top",
+    )
+    stats_axis.text(
+        0.0,
+        0.32,
+        (
+            f"Median  {float(prior_summary.get('median', 0.0)):.2f} d\n"
+            f"P90       {float(prior_summary.get('p90', 0.0)):.2f} d\n"
+            f"Maximum {float(prior_summary.get('max', 0.0)):.2f} d\n"
+            f">14 d      {above_max_lag} edges"
+        ),
+        fontsize=9.0,
+        color=TEXT_COLOR,
+        ha="left",
+        va="top",
+        linespacing=1.5,
+    )
+    stats_axis.axis("off")
+
+    lag_counts = Counter(
+        _lag_bin(float(edge["travel_time_prior_days"]))[0] for edge in edges
+    )
+    labels = [spec[0] for spec in LAG_BIN_SPECS]
+    colors = [spec[3] for spec in LAG_BIN_SPECS]
+    values = [lag_counts[label] for label in labels]
+    y_positions = np.arange(len(labels))
+    lag_axis.barh(
+        y_positions,
+        values,
+        color=colors,
+        edgecolor="white",
+        linewidth=0.6,
+        height=0.7,
+    )
+    for y_position, value in zip(y_positions, values, strict=True):
+        lag_axis.text(
+            value + max(values) * 0.025,
+            y_position,
+            str(value),
+            fontsize=8.2,
+            color=TEXT_COLOR,
+            ha="left",
+            va="center",
+        )
+    lag_axis.set_title(
+        "Edges by travel-time prior",
+        fontsize=10.0,
+        fontweight="bold",
+        color=TEXT_COLOR,
+        loc="left",
+        pad=8,
+    )
+    lag_axis.set_yticks(y_positions, labels, fontsize=8.2)
+    lag_axis.set_xlim(0.0, max(values) * 1.22)
+    lag_axis.tick_params(axis="x", labelsize=7.5, colors=MUTED_TEXT_COLOR)
+    lag_axis.grid(axis="x", color="#E5E9EC", linewidth=0.7)
+    lag_axis.set_axisbelow(True)
+    lag_axis.spines[["top", "right", "left"]].set_visible(False)
+    lag_axis.spines["bottom"].set_color("#AEB6BC")
+    lag_axis.tick_params(axis="y", length=0, colors=TEXT_COLOR)
+
+    figure.text(
+        0.035,
+        0.955,
+        "Contracted monitored river network",
+        fontsize=TITLE_SIZE,
+        fontweight="bold",
+        color=TEXT_COLOR,
+        ha="left",
+        va="top",
+    )
+    figure.text(
+        0.035,
+        0.918,
+        (
+            "Edges follow the first downstream selected reach; layout emphasizes "
+            "information flow rather than geographic distance."
+        ),
+        fontsize=SUBTITLE_SIZE,
+        color=MUTED_TEXT_COLOR,
+        ha="left",
+        va="top",
+    )
+    figure.text(
+        0.035,
+        0.035,
+        (
+            "Blue shades encode path-length travel priors; dashed orange edges exceed the "
+            "14-day candidate lag. Priors are routing assumptions, not causal effects."
+        ),
+        fontsize=FOOTNOTE_SIZE,
+        color=MUTED_TEXT_COLOR,
+        ha="left",
+        va="bottom",
+    )
+    png_path = Path(png_path)
+    pdf_path = Path(pdf_path)
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(png_path, dpi=EXPORT_DPI, bbox_inches="tight", facecolor="white")
+    figure.savefig(pdf_path, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+    return png_path, pdf_path
+
+
 def _network_legend_handles() -> list[Line2D]:
     return [
         Line2D(
@@ -536,6 +950,8 @@ def render_river_graph_figure(
             "text.color": TEXT_COLOR,
         }
     )
+    if int(summary.get("node_count", 0)) > LARGE_GRAPH_NODE_THRESHOLD:
+        return _render_large_graph_figure(summary, png_path, pdf_path)
     card_columns = min(CARD_COLUMNS, len(components))
     card_rows = math.ceil(len(components) / card_columns)
     figure_size = (

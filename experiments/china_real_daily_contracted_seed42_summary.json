@@ -1,0 +1,72 @@
+{
+  "dataset": "china-real-daily-contracted-v0.2",
+  "selection_metric": "validation macro NSE",
+  "seed": 42,
+  "test_set_used": false,
+  "model_count": 4,
+  "models": [
+    {
+      "model": "persistence",
+      "label": "Persistence",
+      "experiment": "china_real_daily_contracted_persistence_seed42",
+      "seed": 42,
+      "status": "baseline",
+      "commit": "b0837eaee0b5ccbec5d6d44272724c7e7874edda",
+      "validation": {
+        "nse": 0.22569793462753296,
+        "mae": 0.2239997833967209,
+        "rmse": 0.6928582191467285
+      },
+      "duration_s": 37.01210439999977,
+      "peak_vram_gb": 0.4770164489746094
+    },
+    {
+      "model": "station_gru",
+      "label": "Station GRU",
+      "experiment": "china_real_daily_contracted_station_gru_seed42",
+      "seed": 42,
+      "status": "baseline",
+      "commit": "b0837eaee0b5ccbec5d6d44272724c7e7874edda",
+      "validation": {
+        "nse": 0.5128806829452515,
+        "mae": 0.21189484000205994,
+        "rmse": 0.5866604447364807
+      },
+      "duration_s": 79.51216380000005,
+      "peak_vram_gb": 1.6939096450805664
+    },
+    {
+      "model": "static_gat",
+      "label": "Static directed GAT",
+      "experiment": "china_real_daily_contracted_static_gat_seed42",
+      "seed": 42,
+      "status": "baseline",
+      "commit": "b0837eaee0b5ccbec5d6d44272724c7e7874edda",
+      "validation": {
+        "nse": 0.516071081161499,
+        "mae": 0.20692655444145203,
+        "rmse": 0.5858131051063538
+      },
+      "duration_s": 306.91401339999993,
+      "peak_vram_gb": 1.6939878463745117
+    },
+    {
+      "model": "riverlagnet",
+      "label": "RiverLagNet",
+      "experiment": "china_real_daily_contracted_riverlagnet_seed42",
+      "seed": 42,
+      "status": "keep",
+      "commit": "b0837eaee0b5ccbec5d6d44272724c7e7874edda",
+      "validation": {
+        "nse": 0.5135431289672852,
+        "mae": 0.20427627861499786,
+        "rmse": 0.5851466059684753
+      },
+      "duration_s": 768.8022787,
+      "peak_vram_gb": 4.048829555511475
+    }
+  ],
+  "riverlagnet_nse_delta_vs_station_gru": 0.0006624460220336914,
+  "riverlagnet_nse_delta_vs_static_gat": -0.002527952194213867,
+  "interpretation": "single-seed pilot; requires paired seeds and lag ablations before a mechanism claim"
+}

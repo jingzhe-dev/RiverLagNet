@@ -61,8 +61,10 @@ def prepare_china_real_daily(
     edge_normalization_path: str | Path | None = None,
     travel_speed_km_per_day: float = DEFAULT_TRAVEL_SPEED_KM_PER_DAY,
     hash_sources: bool = True,
+    dataset_id: str = DATASET_VERSION,
+    graph_construction: dict[str, Any] | None = None,
 ) -> RealDailyPreparationSummary:
-    """Build a chronological 36-node daily panel using original observations only.
+    """Build a chronological daily panel using original observations only.
 
     Values marked ``*_is_imputed=1`` are removed before aggregation. The compact
     tensor artifact stores zero at those missing positions together with an
@@ -80,6 +82,8 @@ def prepare_china_real_daily(
         raise FileNotFoundError(f"graph root not found: {graph_root}")
     if travel_speed_km_per_day <= 0:
         raise ValueError("travel_speed_km_per_day must be positive")
+    if not dataset_id.strip():
+        raise ValueError("dataset_id must not be empty")
 
     normalization_path = _resolve_edge_normalization_path(
         graph_root, edge_normalization_path
@@ -195,7 +199,7 @@ def prepare_china_real_daily(
     split_train_end = int(num_days * 0.70)
     split_val_end = int(num_days * 0.85)
     manifest: dict[str, Any] = {
-        "dataset_id": DATASET_VERSION,
+        "dataset_id": dataset_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source_files": source_hashes,
         "artifact_sha256": artifact_hashes,
@@ -224,6 +228,8 @@ def prepare_china_real_daily(
             "test": [date_strings[split_val_end], date_strings[-1]],
         },
     }
+    if graph_construction is not None:
+        manifest["graph_construction"] = graph_construction
     manifest_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
@@ -349,7 +355,7 @@ def _load_combined_graph(
         edge_names = names
         static_names = names_static
         node_ids.append(segments)
-        component_name = directory.name.removesuffix("-v0.1")
+        component_name = directory.name.rsplit("-v", 1)[0]
         component_ids.append(np.full(segments.size, component_name, dtype="U64"))
         edges.append(edge_index + offset)
         edge_attrs.append(edge_attr)

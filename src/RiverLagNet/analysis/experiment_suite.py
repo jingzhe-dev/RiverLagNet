@@ -150,6 +150,32 @@ REAL_LAG_V1 = SuitePreset(
     graph_figure_png=Path("docs/figures/china_real_daily_upstream_graph.png"),
     graph_figure_pdf=Path("docs/figures/china_real_daily_upstream_graph.pdf"),
 )
+REAL_CONTRACTED_LAG_V2 = SuitePreset(
+    name="real_contracted_lag_v2",
+    experiment_prefix="real_contracted_lag_v2",
+    data_override="china_real_daily_contracted",
+    summary_json=Path("experiments/china_real_daily_contracted_lag_summary.json"),
+    summary_markdown=Path(
+        "docs/china_real_daily_contracted_lag_report_2026-07-14.md"
+    ),
+    report_title="RiverLagNet contracted real daily paired lag ablation report",
+    primary_comparisons=("no_lag", "fixed_lag"),
+    condition_names=("no_lag", "fixed_lag", "learned_lag"),
+    trainer_override="formal_gpu",
+    experiment_override="china_real_daily_contracted",
+    description=(
+        "Contracted real daily China graph with original observations in a "
+        "paired five-seed lag ablation."
+    ),
+    graph_data_root=Path("data/processed/china-real-daily-contracted-v0.2"),
+    graph_summary_json=Path("experiments/china_real_daily_contracted_graph_summary.json"),
+    graph_figure_png=Path(
+        "docs/figures/china_real_daily_contracted_upstream_graph.png"
+    ),
+    graph_figure_pdf=Path(
+        "docs/figures/china_real_daily_contracted_upstream_graph.pdf"
+    ),
+)
 SUITE_PRESETS = {
     preset.name: preset
     for preset in (
@@ -158,6 +184,7 @@ SUITE_PRESETS = {
         IDENTIFIABLE_FUSION_V2,
         IDENTIFIABLE_HORIZON_V5,
         REAL_LAG_V1,
+        REAL_CONTRACTED_LAG_V2,
     )
 }
 

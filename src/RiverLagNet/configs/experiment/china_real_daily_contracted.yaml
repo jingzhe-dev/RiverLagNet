@@ -1,0 +1,5 @@
+name: china_real_daily_contracted_${model.name}_seed${seed}
+description: Real-source daily China observations on the monitored path-contracted HydroRIVERS graph; imputed values excluded.
+status: baseline
+record_result: true
+results_path: experiments/results.tsv
