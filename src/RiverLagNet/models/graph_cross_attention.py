@@ -152,23 +152,35 @@ class EdgeLagHorizonSparseAttention(nn.Module):
         contexts = history_states.new_zeros(
             batch, horizons, nodes, self.num_heads, self.head_dim
         )
-        for node in destination.unique(sorted=True).tolist():
-            edge_mask = destination == node
-            node_scores = scores[:, :, edge_mask]
-            flattened = node_scores.permute(0, 1, 4, 2, 3).flatten(3)
-            node_weights = sparsemax(flattened, dim=-1)
-            node_weights = node_weights.reshape(
-                batch,
-                horizons,
-                self.num_heads,
-                int(edge_mask.sum()),
-                lags,
-            ).permute(0, 1, 3, 4, 2)
-            weights[:, :, edge_mask] = node_weights
-            node_values = candidate_values[:, :, edge_mask]
-            contexts[:, :, node] = (
-                node_weights[..., None] * node_values
-            ).sum(dim=(2, 3))
+        incoming_count = torch.bincount(destination, minlength=nodes)
+        if int(incoming_count.max()) <= 1:
+            # A directed chain/tree segment with one immediate parent per node
+            # normalizes only over lags and avoids one Python launch per node.
+            weights = sparsemax(scores.permute(0, 1, 2, 4, 3), dim=-1).permute(
+                0, 1, 2, 4, 3
+            )
+            edge_context = (
+                weights[..., None] * candidate_values
+            ).sum(dim=3)
+            contexts[:, :, destination] = edge_context
+        else:
+            for node in destination.unique(sorted=True).tolist():
+                edge_mask = destination == node
+                node_scores = scores[:, :, edge_mask]
+                flattened = node_scores.permute(0, 1, 4, 2, 3).flatten(3)
+                node_weights = sparsemax(flattened, dim=-1)
+                node_weights = node_weights.reshape(
+                    batch,
+                    horizons,
+                    self.num_heads,
+                    int(edge_mask.sum()),
+                    lags,
+                ).permute(0, 1, 3, 4, 2)
+                weights[:, :, edge_mask] = node_weights
+                node_values = candidate_values[:, :, edge_mask]
+                contexts[:, :, node] = (
+                    node_weights[..., None] * node_values
+                ).sum(dim=(2, 3))
         return contexts, weights
 
     def _validate(

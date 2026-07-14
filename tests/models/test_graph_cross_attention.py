@@ -52,3 +52,21 @@ def test_transformer_graph_cross_fusion_keeps_headwaters_exactly_zero() -> None:
     assert weights.shape == (2, 3, 4, 2)
     assert torch.equal(fused[:, :, 0], torch.zeros_like(fused[:, :, 0]))
     assert torch.equal(weights[:, :, 0], torch.zeros_like(weights[:, :, 0]))
+
+
+def test_edge_lag_horizon_attention_fast_path_normalizes_directed_chain() -> None:
+    module = EdgeLagHorizonSparseAttention(
+        hidden_dim=8, edge_dim=2, num_heads=2, max_lag=3
+    )
+    history = torch.randn(1, 6, 4, 8)
+    queries = torch.randn(1, 3, 4, 8)
+    edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]])
+    edge_attr = torch.tensor([[0.0, 1.0], [0.0, 2.0], [0.0, 1.0]])
+
+    contexts, weights = module(history, queries, edge_index, edge_attr)
+
+    assert contexts.shape == (1, 3, 4, 2, 4)
+    assert torch.allclose(
+        weights.sum(dim=3), torch.ones(1, 3, 3, 2), atol=1e-5
+    )
+    assert torch.equal(contexts[:, :, 0], torch.zeros_like(contexts[:, :, 0]))

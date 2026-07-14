@@ -90,6 +90,38 @@ class RiverGraphCrossFormer(nn.Module):
         self.attention_weights: Tensor | None = None
         self.fusion_weights: Tensor | None = None
         self.history_routing: Tensor | None = None
+        self._upstream_residual_only = False
+
+    def configure_upstream_residual_training(self, gate_bias: float = -2.0) -> None:
+        """Freeze the local Transformer and train only graph innovations."""
+        for parameter in self.parameters():
+            parameter.requires_grad_(False)
+        for module in (
+            self.history_diffusion,
+            self.graph_attention,
+            self.cross_fusion,
+            self.upstream_decoder,
+        ):
+            for parameter in module.parameters():
+                parameter.requires_grad_(True)
+        with torch.no_grad():
+            self.cross_fusion.gate.weight.zero_()
+            self.cross_fusion.gate.bias.fill_(gate_bias)
+            for head in self.upstream_decoder.heads:
+                head.weight.zero_()
+        self._upstream_residual_only = True
+
+    def train(self, mode: bool = True) -> RiverGraphCrossFormer:
+        """Keep the frozen local Transformer deterministic in residual training."""
+        super().train(mode)
+        if mode and self._upstream_residual_only:
+            for module in (
+                self.input_encoder,
+                self.temporal_transformer,
+                self.local_decoder,
+            ):
+                module.eval()
+        return self
 
     def forward(
         self,

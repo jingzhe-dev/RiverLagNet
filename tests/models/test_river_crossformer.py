@@ -74,3 +74,27 @@ def test_crossformer_headwater_stays_local_after_graph_branch_is_activated() -> 
 
     assert torch.equal(graph_output[:, :, 0], local_output[:, :, 0])
     assert not torch.equal(graph_output[:, :, 1:], local_output[:, :, 1:])
+
+
+def test_crossformer_residual_training_freezes_local_transformer() -> None:
+    model = _model("directed")
+
+    model.configure_upstream_residual_training()
+    model.train()
+    trainable = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+
+    assert trainable
+    assert all(
+        name.startswith(
+            (
+                "history_diffusion.",
+                "graph_attention.",
+                "cross_fusion.",
+                "upstream_decoder.",
+            )
+        )
+        for name in trainable
+    )
+    assert not model.input_encoder.training
+    assert not model.temporal_transformer.training
+    assert not model.local_decoder.training

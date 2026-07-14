@@ -16,6 +16,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from RiverLagNet.data.datamodule import RiverDataModule
 from RiverLagNet.models.riverlag_net import RiverLagNet
+from RiverLagNet.models.river_crossformer import RiverGraphCrossFormer
 from RiverLagNet.training.callbacks import RuntimeStatsCallback
 from RiverLagNet.training.experiment_log import ExperimentRecord, append_experiment_record
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
@@ -153,8 +154,10 @@ def run(cfg: DictConfig) -> dict[str, Any]:
     if cfg.trainer.warm_start_checkpoint:
         _load_warm_start(module, Path(str(cfg.trainer.warm_start_checkpoint)))
     if bool(cfg.trainer.upstream_residual_only):
-        if not isinstance(model, RiverLagNet):
-            raise ValueError("upstream_residual_only requires model=riverlagnet")
+        if not isinstance(model, (RiverLagNet, RiverGraphCrossFormer)):
+            raise ValueError(
+                "upstream_residual_only requires RiverLagNet or RiverGraphCrossFormer"
+            )
         if not cfg.trainer.warm_start_checkpoint:
             raise ValueError("upstream_residual_only requires warm_start_checkpoint")
         model.configure_upstream_residual_training(
