@@ -1,0 +1,68 @@
+{
+  "created_at": "2026-07-14T14:00:00Z",
+  "split_used": "validation",
+  "held_out_test_opened": false,
+  "full_network": {
+    "nodes": 1068,
+    "edges": 1067,
+    "headwaters": 572,
+    "no_graph_experiment": "real1068ext_v17_s42_no_graph",
+    "no_graph_macro_nse": 0.5635020732879639,
+    "graph_experiment": "real1068ext_traj_v18_s42_residual",
+    "graph_macro_nse": 0.5640119314193726,
+    "relative_gain_percent": 0.09048025829501091
+  },
+  "mainstem": {
+    "dataset_id": "china-real-daily-mainstem-61-extended-v0.1",
+    "dataset_sha256": "757f952fb253b356603c6833e27eac222dad3ae7acf4ae3660723b144aa912bb",
+    "selection_rule": "longest directed path by cumulative travel_time_prior_days; no water-quality outcomes used",
+    "nodes": 61,
+    "edges": 60,
+    "total_travel_time_days": 153.0353240966797,
+    "start_node_id": "40578522",
+    "end_node_id": "40629814",
+    "no_graph_experiment": "realmain61ext_v19_s42_no_graph",
+    "no_graph_checkpoint_sha256": "8d9725e56f42f880e924a1ff5e57a71d4afdcebccf73c77c1751e99cbd5f19e0",
+    "no_graph_macro_nse": 0.5839390754699707,
+    "target_relative_gain_percent": 15.0,
+    "target_macro_nse": 0.6715299367904662,
+    "models": [
+      {
+        "name": "8-hop hidden trajectory",
+        "experiment": "realmain61ext_traj_v20_s42_8step_residual",
+        "macro_nse": 0.5930337309837341,
+        "relative_gain_percent": 1.5574665056356765
+      },
+      {
+        "name": "8-hop output transport",
+        "experiment": "realmain61ext_transport_v21_s42_8step_residual",
+        "macro_nse": 0.5833117961883545,
+        "relative_gain_percent": -0.10742204246416612
+      }
+    ]
+  },
+  "signal_diagnostics": {
+    "deployable_train_fit_validation_eval": {
+      "method": "per-node, horizon, and target ridge correction from travel-time-aligned upstream history or upstream local forecasts; fit on chronological training windows and evaluated on validation windows",
+      "best_ancestor_depth": 2,
+      "baseline_macro_nse": 0.5839358568191528,
+      "corrected_macro_nse": 0.5846741199493408,
+      "relative_gain_percent": 0.12642880576121757
+    },
+    "training_only_selected_cohort": {
+      "method": "select nodes with at least 15% graph gain on the final 20% of training windows after fitting on the first 80%; refit on all training windows and evaluate once on validation",
+      "selected_nodes": 12,
+      "validation_no_graph_macro_nse": 0.4911665618419647,
+      "validation_graph_macro_nse": 0.49541130661964417,
+      "relative_gain_percent": 0.8642169698525225
+    },
+    "non_deployable_true_future_oracle": {
+      "method": "per-node and target ridge correction using true validation-period upstream future forecast errors from up to eight ancestors; fitted and evaluated on the same validation outcomes",
+      "uses_future_targets": true,
+      "baseline_macro_nse": 0.5839358568191528,
+      "oracle_macro_nse": 0.6781349182128906,
+      "relative_gain_percent": 16.131748083918676
+    }
+  },
+  "interpretation": "The 15% gain exists only for a non-deployable oracle that reads true future upstream errors. Historical upstream information does not provide a stable validation-period gain of that magnitude."
+}
