@@ -1,0 +1,5 @@
+name: china_real_daily_contracted_1068_extended_${model.name}_seed${seed}
+description: Real daily China observations with 24 original water-quality, meteorological, soil-water, and discharge covariates on the 1068-node contracted river tree.
+status: baseline
+record_result: true
+results_path: experiments/results.tsv

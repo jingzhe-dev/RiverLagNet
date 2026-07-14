@@ -10,6 +10,7 @@ from RiverLagNet.data.contracted_real_daily import (
     contracted_summary_as_dict,
     prepare_china_contracted_real_daily,
 )
+from RiverLagNet.data.real_daily import EXTENDED_DYNAMIC_COVARIATES
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,6 +26,11 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=Path("data/processed/china-real-daily-contracted-v0.2"),
+    )
+    parser.add_argument(
+        "--extended-inputs",
+        action="store_true",
+        help="Include original water-quality, meteorological, soil-water, and discharge covariates",
     )
     parser.add_argument("--min-target-coverage", type=float, default=0.90)
     parser.add_argument("--min-component-nodes", type=int, default=3)
@@ -62,6 +68,7 @@ def main() -> None:
         max_lag_days=args.max_lag_days,
         hash_sources=not args.skip_source_hashes,
         dataset_id=args.dataset_id,
+        dynamic_covariates=(EXTENDED_DYNAMIC_COVARIATES if args.extended_inputs else ()),
     )
     print(json.dumps(contracted_summary_as_dict(summary), indent=2, ensure_ascii=False))
 

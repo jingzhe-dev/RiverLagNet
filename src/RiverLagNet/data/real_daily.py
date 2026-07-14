@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,32 @@ from .schema import TARGET_NAMES, RiverGraph, TimeSeriesData
 
 DATASET_VERSION = "china-real-daily-v0.1"
 DEFAULT_TRAVEL_SPEED_KM_PER_DAY = 30.0
+EXTENDED_DYNAMIC_COVARIATES = (
+    "Temp",
+    "pH",
+    "DO",
+    "EC",
+    "Tur",
+    "TN",
+    "Chl_a",
+    "Algae_Density",
+    "dewpoint_temperature_2m",
+    "potential_evaporation",
+    "snow_depth_water_equivalent",
+    "surface_net_solar_radiation",
+    "surface_net_thermal_radiation",
+    "surface_pressure",
+    "temperature_2m",
+    "total_precipitation",
+    "u_component_of_wind_10m",
+    "v_component_of_wind_10m",
+    "volumetric_soil_water_layer_1",
+    "volumetric_soil_water_layer_2",
+    "volumetric_soil_water_layer_3",
+    "volumetric_soil_water_layer_4",
+    "rowe",
+    "dis24",
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +90,7 @@ def prepare_china_real_daily(
     hash_sources: bool = True,
     dataset_id: str = DATASET_VERSION,
     graph_construction: dict[str, Any] | None = None,
+    dynamic_covariates: Sequence[str] = (),
 ) -> RealDailyPreparationSummary:
     """Build a chronological daily panel using original observations only.
 
@@ -97,8 +125,12 @@ def prepare_china_real_daily(
     source_station_ids = (
         mapping.get_column("source_station_id").unique().sort().to_list()
     )
+    covariates = tuple(dict.fromkeys(str(name) for name in dynamic_covariates))
+    if any(name in TARGET_NAMES for name in covariates):
+        raise ValueError("dynamic_covariates must not repeat target names")
+    variable_names = (*TARGET_NAMES, *covariates)
     panel = _build_observed_panel(
-        dynamic_path, flags_path, mapping, source_station_ids
+        dynamic_path, flags_path, mapping, source_station_ids, variable_names
     )
 
     dates = panel.get_column("date").unique().sort()
@@ -121,17 +153,17 @@ def prepare_china_real_daily(
     num_days = len(dates)
     num_nodes = graph.node_ids.size
     values = np.stack(
-        [panel.get_column(name).fill_null(0.0).to_numpy() for name in TARGET_NAMES],
+        [panel.get_column(name).fill_null(0.0).to_numpy() for name in variable_names],
         axis=-1,
-    ).reshape(num_days, num_nodes, len(TARGET_NAMES)).astype(np.float32)
+    ).reshape(num_days, num_nodes, len(variable_names)).astype(np.float32)
     observed = np.stack(
-        [panel.get_column(f"{name}_observed").to_numpy() for name in TARGET_NAMES],
+        [panel.get_column(f"{name}_observed").to_numpy() for name in variable_names],
         axis=-1,
-    ).reshape(num_days, num_nodes, len(TARGET_NAMES)).astype(bool)
+    ).reshape(num_days, num_nodes, len(variable_names)).astype(bool)
     quality = np.stack(
-        [panel.get_column(f"{name}_quality").to_numpy() for name in TARGET_NAMES],
+        [panel.get_column(f"{name}_quality").to_numpy() for name in variable_names],
         axis=-1,
-    ).reshape(num_days, num_nodes, len(TARGET_NAMES)).astype(np.float32)
+    ).reshape(num_days, num_nodes, len(variable_names)).astype(np.float32)
     if not np.isfinite(values).all() or not np.isfinite(quality).all():
         raise ValueError("prepared real-data tensors contain non-finite values")
 
@@ -166,13 +198,14 @@ def prepare_china_real_daily(
             node_ids=graph.node_ids.astype("U"),
             component_ids=graph.component_ids.astype("U"),
             target_names=np.asarray(TARGET_NAMES, dtype="U"),
+            variable_names=np.asarray(variable_names, dtype="U"),
             static_names=graph.static_names.astype("U"),
             edge_attr_names=graph.edge_attr_names.astype("U"),
             source_station_count=source_station_count.astype(np.int64),
         )
 
     review_columns = ["date", "station_id"]
-    for name in TARGET_NAMES:
+    for name in variable_names:
         review_columns.extend([name, f"{name}_observed", f"{name}_quality"])
     panel.select(review_columns).write_parquet(observations_path)
     mapping.write_parquet(station_mapping_path)
@@ -206,6 +239,11 @@ def prepare_china_real_daily(
         "graph_root": str(graph_root),
         "edge_normalization_path": str(normalization_path) if normalization_path else None,
         "target_names": list(TARGET_NAMES),
+        "dynamic_input_names": list(variable_names),
+        "dynamic_input_observed_rates": {
+            name: float(observed[..., index].mean())
+            for index, name in enumerate(variable_names)
+        },
         "date_range": [date_strings[0], date_strings[-1]],
         "shape": list(values.shape),
         "num_edges": int(graph.edge_index.shape[1]),
@@ -463,10 +501,16 @@ def _build_observed_panel(
     flags_path: Path,
     mapping: pl.DataFrame,
     station_ids: list[int],
+    variable_names: Sequence[str] = TARGET_NAMES,
 ) -> pl.DataFrame:
+    value_scan = pl.scan_csv(dynamic_path)
+    value_columns = set(value_scan.collect_schema().names())
+    missing_values = set(variable_names).difference(value_columns)
+    if missing_values:
+        raise ValueError(f"dynamic source lacks {sorted(missing_values)}")
     values = (
-        pl.scan_csv(dynamic_path)
-        .select(["id", "time", *TARGET_NAMES])
+        value_scan
+        .select(["id", "time", *variable_names])
         .filter(pl.col("id").is_in(station_ids))
         .with_columns(
             pl.col("id").cast(pl.Int64),
@@ -474,9 +518,14 @@ def _build_observed_panel(
         )
         .drop("time")
     )
-    flag_names = [f"{name}_is_imputed" for name in TARGET_NAMES]
+    flag_scan = pl.scan_csv(flags_path)
+    flag_columns = set(flag_scan.collect_schema().names())
+    flagged_variables = [
+        name for name in variable_names if f"{name}_is_imputed" in flag_columns
+    ]
+    flag_names = [f"{name}_is_imputed" for name in flagged_variables]
     flags = (
-        pl.scan_csv(flags_path)
+        flag_scan
         .select(["id", "time", *flag_names])
         .filter(pl.col("id").is_in(station_ids))
         .with_columns(
@@ -492,8 +541,10 @@ def _build_observed_panel(
         station_map.lazy(), on="id", how="inner"
     )
     aggregations: list[pl.Expr] = []
-    for name in TARGET_NAMES:
-        is_observed = pl.col(f"{name}_is_imputed") == 0
+    for name in variable_names:
+        is_observed = pl.col(name).is_not_null() & pl.col(name).is_finite()
+        if name in flagged_variables:
+            is_observed = is_observed & (pl.col(f"{name}_is_imputed") == 0)
         aggregations.extend(
             [
                 pl.when(is_observed).then(pl.col(name)).mean().alias(name),

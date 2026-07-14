@@ -26,6 +26,7 @@ def _write_real_sources(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
                     (station_id == 1 and day_index == 0)
                     or (station_id in (1, 2) and day_index == 1)
                 )
+            row["Temp"] = float(15 + station_id + day_index / 10)
             value_rows.append(row)
             flag_rows.append(flags)
     dynamic_path = tmp_path / "dynamic.csv"
@@ -124,6 +125,27 @@ def test_real_daily_preparation_excludes_imputed_values_and_preserves_direction(
     )
     assert review.get_column("NH3N").null_count() == 1
     assert review.get_column("NH3N_observed").item() is False
+
+
+def test_real_daily_preparation_can_append_original_dynamic_covariates(
+    tmp_path: Path,
+) -> None:
+    sources = _write_real_sources(tmp_path)
+    summary = prepare_china_real_daily(
+        *sources,
+        travel_speed_km_per_day=11.0,
+        hash_sources=False,
+        dynamic_covariates=("Temp",),
+    )
+    data = load_real_daily_dataset(summary.dataset_path)
+
+    assert data.values.shape == (20, 2, 4)
+    assert data.observed[..., 3].all()
+    with np.load(summary.dataset_path) as archive:
+        assert archive["variable_names"].tolist() == ["NH3N", "CODMn", "TP", "Temp"]
+    manifest = json.loads(summary.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["dynamic_input_names"] == ["NH3N", "CODMn", "TP", "Temp"]
+    assert manifest["dynamic_input_observed_rates"]["Temp"] == 1.0
 
 
 def test_real_daily_datamodule_uses_train_only_observed_statistics(tmp_path: Path) -> None:

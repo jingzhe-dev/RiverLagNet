@@ -7,6 +7,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+from collections.abc import Sequence
 
 from .contracted_graph import (
     build_contracted_graph,
@@ -46,6 +47,7 @@ def prepare_china_contracted_real_daily(
     max_lag_days: int = 14,
     hash_sources: bool = True,
     dataset_id: str = CONTRACTED_DATASET_VERSION,
+    dynamic_covariates: Sequence[str] = (),
 ) -> ContractedRealDailyPreparationSummary:
     """Build the audited contracted graph and its leakage-safe daily tensor."""
     hydrorivers_zip = Path(hydrorivers_zip).expanduser().resolve()
@@ -81,6 +83,7 @@ def prepare_china_contracted_real_daily(
         hash_sources=hash_sources,
         dataset_id=dataset_id,
         graph_construction=assets.report,
+        dynamic_covariates=dynamic_covariates,
     )
 
     manifest = json.loads(dataset.manifest_path.read_text(encoding="utf-8"))
