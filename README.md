@@ -241,7 +241,7 @@ The common training/evaluation path supports:
 1. Persistence
 2. Station GRU without a graph
 3. Static Directed GAT without lag selection
-4. RiverLagNet with factorized within-edge lag attention followed by incoming-edge attention
+4. RiverLagNet with joint incoming-edge × lag attention
 
 Required ablations are `no_graph`, `undirected_graph`, `shuffled_graph`, `no_lag`, `fixed_lag`, and `learned_lag`. Attention weights are routing weights and must not be interpreted as causal contributions.
 

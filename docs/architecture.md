@@ -45,14 +45,9 @@ Scores use the destination local state, aligned source state, encoded edge
 attributes, and a learned lag embedding. Learned-lag scores add a configurable
 Gaussian log-prior centered on `travel_time_prior_days`; the neural score
 remains a trainable residual that can move probability away from the prior.
-Routing uses a factorized normalization. Lag softmax is first computed within
-each directed edge, producing one lag-aligned state per upstream edge. A
-second softmax then allocates weight across the incoming edges of each
-destination and horizon. Their product is the reported joint edge-lag weight,
-which still sums to one over every incoming edge and available lag. This
-separates propagation-time selection from upstream-station selection and
-prevents the number or spread of lag candidates from changing an edge's total
-mass. A node with no incoming edges receives an exact zero upstream state.
+Softmax is computed jointly over every incoming edge and available lag for
+each destination and horizon. Consequently, each candidate set sums to one. A
+node with no incoming edges receives an exact zero upstream state.
 
 `no_lag` is the static-graph ablation and repeats the latest source state at
 every horizon. `fixed_lag` selects the rounded and clipped
