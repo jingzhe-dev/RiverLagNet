@@ -16,13 +16,21 @@ def _payload() -> dict[str, object]:
             {
                 "seed": seed,
                 "no_graph": {"macro_nse": local},
+                "uncalibrated_directed_graph": {"macro_nse": graph - 0.001},
                 "directed_graph": {"macro_nse": graph},
+                "learned_lag": {"macro_nse": graph + 0.00001},
             }
         )
     return {
         "test_split_used": False,
         "seeds": seeds,
         "paired_global_delta": {"macro_nse": _summary([0.01, 0.005])},
+        "paired_horizon_calibration_delta": {
+            "macro_nse": _summary([0.001, 0.001])
+        },
+        "paired_lag_refinement_delta": {
+            "macro_nse": _summary([0.00001, 0.00001])
+        },
         "downstream_target_delta_nse": {
             name: _summary(values)
             for name, values in {

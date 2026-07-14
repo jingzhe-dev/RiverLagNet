@@ -42,15 +42,24 @@ RUN_PAIRS: dict[int, tuple[str, str]] = {
         for seed in range(43, 47)
     },
 }
+HORIZON_RUNS = {
+    seed: f"real_contracted_horizon_v10_s{seed}_linear_lr020"
+    for seed in range(42, 47)
+}
+LAG_RUNS = {
+    seed: f"real_contracted_lagrefine_v11_s{seed}" for seed in range(42, 47)
+}
 HORIZON_BANDS = {"days_1_7": (0, 7), "days_8_14": (7, 14), "days_15_30": (14, 30)}
 
-FIGURE_SIZE = (15.2, 6.0)
+FIGURE_SIZE = (16.2, 6.0)
 EXPORT_DPI = 300
 TEXT_COLOR = "#24292D"
 MUTED_COLOR = "#67727A"
 GRID_COLOR = "#DDE3E6"
 NO_GRAPH_COLOR = "#9AA7AE"
+RAW_GRAPH_COLOR = "#7196A5"
 GRAPH_COLOR = "#2F7183"
+LAG_COLOR = "#80678F"
 
 
 def _summary(values: Sequence[float]) -> dict[str, float | int]:
@@ -86,6 +95,10 @@ def _build_module(
     *,
     graph_variant: str,
     seed: int,
+    lag_mode: str = "no_lag",
+    lag_bias_mode: str = "none",
+    lag_residual_max_mix: float = 1.0,
+    horizon_gate_mode: str = "none",
 ) -> RiverForecastModule:
     model = build_model(
         "riverlagnet",
@@ -95,12 +108,14 @@ def _build_module(
         target_dim=3,
         max_lag=14,
         graph_variant=graph_variant,
-        lag_mode="no_lag",
+        lag_mode=lag_mode,
         dropout=0.1,
         graph_seed=seed,
         lag_prior_scale_days=1.0,
         lag_prior_strength=8.0,
-        lag_residual_max_mix=1.0,
+        lag_residual_max_mix=lag_residual_max_mix,
+        lag_bias_mode=lag_bias_mode,
+        horizon_gate_mode=horizon_gate_mode,
     )
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     hyperparameters = payload.get("hyper_parameters")
@@ -118,6 +133,34 @@ def _build_module(
             f"unexpected={sorted(incompatible.unexpected_keys)}"
         )
     return module
+
+
+def _horizon_gate_parameters(checkpoint: Path) -> dict[str, object]:
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)["state_dict"]
+    offset = float(state["model.horizon_gate.offset"])
+    slope = float(state["model.horizon_gate.slope"])
+    normalized_lead = state["model.horizon_gate.normalized_lead"]
+    scales = 2.0 * torch.sigmoid(offset + slope * normalized_lead)
+    return {
+        "offset": offset,
+        "slope": slope,
+        "scales": [float(value) for value in scales],
+    }
+
+
+def _lag_refinement_parameters(
+    checkpoint: Path, max_mix: float = 0.1
+) -> dict[str, object]:
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)["state_dict"]
+    raw_mix = float(state["model.message_passing.lag_residual_scale"])
+    relative_bias = state["model.message_passing.lag_offset_bias"].to(torch.float32)
+    biases = torch.cat((torch.zeros(1), relative_bias))
+    return {
+        "raw_mix": raw_mix,
+        "effective_mix": max_mix * math.tanh(raw_mix),
+        "lag_biases": [float(value) for value in biases],
+        "peak_global_bias_lag": int(torch.argmax(biases)),
+    }
 
 
 def _validation_predictions(
@@ -197,10 +240,14 @@ def build_graph_gain_summary(
     *,
     device: str | None = None,
     run_pairs: Mapping[int, tuple[str, str]] = RUN_PAIRS,
+    horizon_runs: Mapping[int, str] = HORIZON_RUNS,
+    lag_runs: Mapping[int, str] = LAG_RUNS,
 ) -> dict[str, object]:
     """Audit paired validation predictions without touching the held-out test split."""
     if not run_pairs:
         raise ValueError("at least one paired seed is required")
+    if set(run_pairs) != set(horizon_runs) or set(run_pairs) != set(lag_runs):
+        raise ValueError("all refinement stages must contain the same seeds")
     selected_device = torch.device(
         device or ("cuda" if torch.cuda.is_available() else "cpu")
     )
@@ -231,17 +278,25 @@ def build_graph_gain_summary(
     if len(node_ids) != datamodule.data_spec.num_nodes:
         raise ValueError("dataset node IDs do not match the tensor node count")
 
-    experiment_names = {name for pair in run_pairs.values() for name in pair}
+    experiment_names = (
+        {name for pair in run_pairs.values() for name in pair}
+        | set(horizon_runs.values())
+        | set(lag_runs.values())
+    )
     ledger = _ledger_metrics(ledger_path, experiment_names)
     seed_rows: list[dict[str, object]] = []
     downstream_target_deltas = {target: [] for target in TARGET_NAMES}
     horizon_deltas = {band: [] for band in HORIZON_BANDS}
+    lag_target_deltas = {target: [] for target in TARGET_NAMES}
+    lag_horizon_deltas = {band: [] for band in HORIZON_BANDS}
     node_deltas: list[list[float]] = [[] for _ in node_ids]
     headwater_max_differences: list[float] = []
 
     reference_target: Tensor | None = None
     reference_mask: Tensor | None = None
     for seed, (no_graph_run, graph_run) in sorted(run_pairs.items()):
+        horizon_run = horizon_runs[seed]
+        lag_run = lag_runs[seed]
         no_graph = _validation_predictions(
             _build_module(
                 datamodule,
@@ -262,9 +317,47 @@ def build_graph_gain_summary(
             datamodule,
             selected_device,
         )
+        horizon_checkpoint = _best_checkpoint(run_root, horizon_run)
+        horizon_graph = _validation_predictions(
+            _build_module(
+                datamodule,
+                horizon_checkpoint,
+                graph_variant="directed",
+                seed=seed,
+                horizon_gate_mode="linear",
+            ),
+            datamodule,
+            selected_device,
+        )
+        lag_checkpoint = _best_checkpoint(run_root, lag_run)
+        lag_graph = _validation_predictions(
+            _build_module(
+                datamodule,
+                lag_checkpoint,
+                graph_variant="directed",
+                seed=seed,
+                lag_mode="learned_lag",
+                lag_bias_mode="global",
+                lag_residual_max_mix=0.1,
+                horizon_gate_mode="linear",
+            ),
+            datamodule,
+            selected_device,
+        )
         no_prediction, target, mask = no_graph
-        graph_prediction, graph_target, graph_mask = graph
-        if not torch.equal(target, graph_target) or not torch.equal(mask, graph_mask):
+        raw_graph_prediction, graph_target, graph_mask = graph
+        graph_prediction, horizon_target, horizon_mask = horizon_graph
+        lag_prediction, lag_target, lag_mask = lag_graph
+        paired_targets = (
+            (graph_target, graph_mask),
+            (horizon_target, horizon_mask),
+            (lag_target, lag_mask),
+        )
+        if any(
+            not torch.equal(target, paired_target)
+            or not torch.equal(mask, paired_mask)
+            for paired_target, paired_mask in paired_targets
+        ):
             raise ValueError("paired checkpoints must use identical validation targets")
         if reference_target is None:
             reference_target, reference_mask = target, mask
@@ -272,14 +365,21 @@ def build_graph_gain_summary(
             raise ValueError("all seeds must use identical real validation targets")
 
         no_global = _metrics(no_prediction, target, mask)
+        raw_graph_global = _metrics(raw_graph_prediction, target, mask)
         graph_global = _metrics(graph_prediction, target, mask)
+        lag_global = _metrics(lag_prediction, target, mask)
         _assert_ledger_match(no_global, ledger[no_graph_run])
-        _assert_ledger_match(graph_global, ledger[graph_run])
+        _assert_ledger_match(raw_graph_global, ledger[graph_run])
+        _assert_ledger_match(graph_global, ledger[horizon_run])
+        _assert_ledger_match(lag_global, ledger[lag_run])
         no_downstream = _subset_metrics(
             no_prediction, target, mask, downstream_indices
         )
         graph_downstream = _subset_metrics(
             graph_prediction, target, mask, downstream_indices
+        )
+        lag_downstream = _subset_metrics(
+            lag_prediction, target, mask, downstream_indices
         )
         no_headwater = _subset_metrics(no_prediction, target, mask, headwater_indices)
         graph_headwater = _subset_metrics(
@@ -297,6 +397,7 @@ def build_graph_gain_summary(
         )
 
         target_delta: dict[str, float] = {}
+        lag_target_delta: dict[str, float] = {}
         for target_name in TARGET_NAMES:
             delta = (
                 graph_downstream[f"nse_{target_name}"]
@@ -304,7 +405,14 @@ def build_graph_gain_summary(
             )
             target_delta[target_name] = delta
             downstream_target_deltas[target_name].append(delta)
+            lag_delta = (
+                lag_downstream[f"nse_{target_name}"]
+                - graph_downstream[f"nse_{target_name}"]
+            )
+            lag_target_delta[target_name] = lag_delta
+            lag_target_deltas[target_name].append(lag_delta)
         band_delta: dict[str, float] = {}
+        lag_band_delta: dict[str, float] = {}
         for band, (start, stop) in HORIZON_BANDS.items():
             no_band = _subset_metrics(
                 no_prediction[:, start:stop],
@@ -321,6 +429,15 @@ def build_graph_gain_summary(
             delta = graph_band["macro_nse"] - no_band["macro_nse"]
             band_delta[band] = delta
             horizon_deltas[band].append(delta)
+            lag_band = _subset_metrics(
+                lag_prediction[:, start:stop],
+                target[:, start:stop],
+                mask[:, start:stop],
+                downstream_indices,
+            )
+            lag_delta = lag_band["macro_nse"] - graph_band["macro_nse"]
+            lag_band_delta[band] = lag_delta
+            lag_horizon_deltas[band].append(lag_delta)
         for node_index in all_indices.tolist():
             node_tensor = torch.tensor([node_index])
             no_node = _subset_metrics(no_prediction, target, mask, node_tensor)
@@ -333,13 +450,31 @@ def build_graph_gain_summary(
             {
                 "seed": seed,
                 "no_graph_run": no_graph_run,
-                "directed_graph_run": graph_run,
+                "uncalibrated_directed_graph_run": graph_run,
+                "directed_graph_run": horizon_run,
+                "learned_lag_run": lag_run,
                 "no_graph": no_global,
+                "uncalibrated_directed_graph": raw_graph_global,
                 "directed_graph": graph_global,
+                "learned_lag": lag_global,
                 "global_delta": {
                     name: graph_global[name] - no_global[name]
                     for name in ("macro_nse", "macro_mae", "macro_rmse")
                 },
+                "horizon_calibration_delta": {
+                    name: graph_global[name] - raw_graph_global[name]
+                    for name in ("macro_nse", "macro_mae", "macro_rmse")
+                },
+                "lag_refinement_delta": {
+                    name: lag_global[name] - graph_global[name]
+                    for name in ("macro_nse", "macro_mae", "macro_rmse")
+                },
+                "horizon_gate_parameters": _horizon_gate_parameters(
+                    horizon_checkpoint
+                ),
+                "lag_refinement_parameters": _lag_refinement_parameters(
+                    lag_checkpoint
+                ),
                 "downstream_delta_macro_nse": (
                     graph_downstream["macro_nse"] - no_downstream["macro_nse"]
                 ),
@@ -348,6 +483,8 @@ def build_graph_gain_summary(
                 ),
                 "downstream_target_delta_nse": target_delta,
                 "downstream_horizon_delta_macro_nse": band_delta,
+                "lag_downstream_target_delta_nse": lag_target_delta,
+                "lag_downstream_horizon_delta_macro_nse": lag_band_delta,
             }
         )
 
@@ -359,6 +496,30 @@ def build_graph_gain_summary(
     ]
     global_rmse_deltas = [
         float(row["global_delta"]["macro_rmse"]) for row in seed_rows  # type: ignore[index]
+    ]
+    horizon_nse_deltas = [
+        float(row["horizon_calibration_delta"]["macro_nse"])  # type: ignore[index]
+        for row in seed_rows
+    ]
+    horizon_mae_deltas = [
+        float(row["horizon_calibration_delta"]["macro_mae"])  # type: ignore[index]
+        for row in seed_rows
+    ]
+    horizon_rmse_deltas = [
+        float(row["horizon_calibration_delta"]["macro_rmse"])  # type: ignore[index]
+        for row in seed_rows
+    ]
+    lag_nse_deltas = [
+        float(row["lag_refinement_delta"]["macro_nse"])  # type: ignore[index]
+        for row in seed_rows
+    ]
+    lag_mae_deltas = [
+        float(row["lag_refinement_delta"]["macro_mae"])  # type: ignore[index]
+        for row in seed_rows
+    ]
+    lag_rmse_deltas = [
+        float(row["lag_refinement_delta"]["macro_rmse"])  # type: ignore[index]
+        for row in seed_rows
     ]
     downstream_deltas = [float(row["downstream_delta_macro_nse"]) for row in seed_rows]
     node_rows = [
@@ -390,6 +551,16 @@ def build_graph_gain_summary(
             "macro_mae": _summary(global_mae_deltas),
             "macro_rmse": _summary(global_rmse_deltas),
         },
+        "paired_horizon_calibration_delta": {
+            "macro_nse": _summary(horizon_nse_deltas),
+            "macro_mae": _summary(horizon_mae_deltas),
+            "macro_rmse": _summary(horizon_rmse_deltas),
+        },
+        "paired_lag_refinement_delta": {
+            "macro_nse": _summary(lag_nse_deltas),
+            "macro_mae": _summary(lag_mae_deltas),
+            "macro_rmse": _summary(lag_rmse_deltas),
+        },
         "downstream_delta_macro_nse": _summary(downstream_deltas),
         "downstream_target_delta_nse": {
             target: _summary(values)
@@ -397,6 +568,12 @@ def build_graph_gain_summary(
         },
         "downstream_horizon_delta_macro_nse": {
             band: _summary(values) for band, values in horizon_deltas.items()
+        },
+        "lag_downstream_target_delta_nse": {
+            target: _summary(values) for target, values in lag_target_deltas.items()
+        },
+        "lag_downstream_horizon_delta_macro_nse": {
+            band: _summary(values) for band, values in lag_horizon_deltas.items()
         },
         "headwater_invariance": {
             "max_abs_prediction_difference": max(headwater_max_differences),
@@ -465,23 +642,37 @@ def _panel_label(axis: plt.Axes, label: str) -> None:
 def _paired_panel(axis: plt.Axes, summary: Mapping[str, Any]) -> None:
     rows = list(summary["seeds"])
     for row in rows:
-        values = [row["no_graph"]["macro_nse"], row["directed_graph"]["macro_nse"]]
-        axis.plot([0, 1], values, color="#8DA5AE", linewidth=1.0, alpha=0.8, zorder=1)
+        values = [
+            row["no_graph"]["macro_nse"],
+            row["uncalibrated_directed_graph"]["macro_nse"],
+            row["directed_graph"]["macro_nse"],
+            row["learned_lag"]["macro_nse"],
+        ]
+        axis.plot(range(4), values, color="#8DA5AE", linewidth=1.0, alpha=0.8, zorder=1)
         axis.scatter(
-            [0, 1],
+            range(4),
             values,
-            color=[NO_GRAPH_COLOR, GRAPH_COLOR],
+            color=[NO_GRAPH_COLOR, RAW_GRAPH_COLOR, GRAPH_COLOR, LAG_COLOR],
             s=31,
             edgecolor="white",
             linewidth=0.5,
             zorder=2,
         )
-        axis.text(1.035, values[1], str(row["seed"]), fontsize=7.5, va="center")
+        axis.text(3.07, values[3], str(row["seed"]), fontsize=7.5, va="center")
     no_values = [float(row["no_graph"]["macro_nse"]) for row in rows]
+    raw_values = [
+        float(row["uncalibrated_directed_graph"]["macro_nse"]) for row in rows
+    ]
     graph_values = [float(row["directed_graph"]["macro_nse"]) for row in rows]
+    lag_values = [float(row["learned_lag"]["macro_nse"]) for row in rows]
     axis.plot(
-        [0, 1],
-        [statistics.fmean(no_values), statistics.fmean(graph_values)],
+        range(4),
+        [
+            statistics.fmean(no_values),
+            statistics.fmean(raw_values),
+            statistics.fmean(graph_values),
+            statistics.fmean(lag_values),
+        ],
         color=TEXT_COLOR,
         linewidth=2.2,
         marker="D",
@@ -489,10 +680,19 @@ def _paired_panel(axis: plt.Axes, summary: Mapping[str, Any]) -> None:
         zorder=3,
     )
     delta = summary["paired_global_delta"]["macro_nse"]
+    horizon_delta = summary["paired_horizon_calibration_delta"]["macro_nse"]
+    lag_delta = summary["paired_lag_refinement_delta"]["macro_nse"]
     axis.text(
         0.03,
         0.97,
-        f"Mean ΔNSE = {float(delta['mean']):+.5f}\n{int(delta['positive_count'])}/{int(delta['n'])} seeds improve",
+        (
+            f"Graph vs local  {float(delta['mean']):+.5f}"
+            f" ({int(delta['positive_count'])}/{int(delta['n'])})\n"
+            f"Horizon gate  {float(horizon_delta['mean']):+.5f}"
+            f" ({int(horizon_delta['positive_count'])}/{int(horizon_delta['n'])})\n"
+            f"Learned lag   {float(lag_delta['mean']):+.6f}"
+            f" ({int(lag_delta['positive_count'])}/{int(lag_delta['n'])})"
+        ),
         transform=axis.transAxes,
         ha="left",
         va="top",
@@ -500,10 +700,13 @@ def _paired_panel(axis: plt.Axes, summary: Mapping[str, Any]) -> None:
         color=TEXT_COLOR,
         bbox={"facecolor": "white", "edgecolor": GRID_COLOR, "pad": 4},
     )
-    axis.set_xticks([0, 1], ["Local only\n(no graph)", "Directed upstream\nRiverLagNet"])
+    axis.set_xticks(
+        range(4),
+        ["Local\n(no graph)", "Directed\nno lag", "+ Horizon\ngate", "+ Learned\nlag"],
+    )
     axis.set_ylabel("Validation macro NSE", fontsize=9.5)
     axis.set_title("Consistent across seeds", fontsize=10, fontweight="bold", pad=10)
-    axis.set_xlim(-0.18, 1.18)
+    axis.set_xlim(-0.25, 3.28)
     _style_axis(axis)
     _panel_label(axis, "a")
 
@@ -681,7 +884,7 @@ def render_graph_gain_figure(
         }
     )
     figure = plt.figure(figsize=FIGURE_SIZE, facecolor="white")
-    grid = figure.add_gridspec(1, 3, width_ratios=(0.82, 1.02, 2.15), wspace=0.42)
+    grid = figure.add_gridspec(1, 3, width_ratios=(1.18, 1.02, 2.15), wspace=0.42)
     paired_axis = figure.add_subplot(grid[0, 0])
     mechanism_axis = figure.add_subplot(grid[0, 1])
     network_axis = figure.add_subplot(grid[0, 2])
@@ -689,7 +892,7 @@ def render_graph_gain_figure(
     _mechanism_panel(mechanism_axis, summary)
     _network_panel(network_axis, summary, graph_summary, figure)
     figure.suptitle(
-        "Directed upstream information yields a consistent validation gain",
+        "Directed upstream information improves validation; explicit lag adds little",
         x=0.045,
         y=0.995,
         ha="left",
@@ -700,7 +903,7 @@ def render_graph_gain_figure(
     figure.text(
         0.045,
         0.948,
-        "Five paired seeds · 238 monitored segments · 237 directed edges · local forecaster frozen before graph-residual training",
+        "Five paired seeds · 238 monitored segments · 237 directed edges · all refinement stages strictly nest their frozen predecessor",
         ha="left",
         fontsize=9,
         color=MUTED_COLOR,
@@ -708,7 +911,7 @@ def render_graph_gain_figure(
     figure.text(
         0.045,
         0.018,
-        "Validation split only; the held-out test set remains unopened. Node colors show predictive increments, not causal effects.",
+        "Validation split only; the held-out test set remains unopened. Node colors show predictive increments, not causal effects or recovered travel times.",
         ha="left",
         fontsize=8,
         color=MUTED_COLOR,

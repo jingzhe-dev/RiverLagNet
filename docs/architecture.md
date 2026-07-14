@@ -122,22 +122,29 @@ Attention weights indicate learned routing preference only. They are not causal 
 
 ## Current validation-selected real-data candidate
 
-The contracted real-data architecture screen currently selects the two-stage
-directed `no_lag` upstream residual. Across seeds 42--46 it improves validation
-macro NSE over its paired frozen `no_graph` checkpoint by
-`0.001101 ± 0.000255` with five of five positive differences. The gain is
-`0.001914 ± 0.000457` on the 112 nodes with incoming upstream edges, while the
-126 headwater predictions remain exactly unchanged. The largest horizon-band
-gain is at days 15--30 (`+0.003537`). These are validation increments, not
-causal effects; the held-out test split remains unopened.
+The contracted real-data architecture screen currently selects the strictly
+nested directed upstream residual with a linear horizon gate and bounded
+learned-lag refinement. Across seeds 42--46 it improves validation macro NSE
+over its paired frozen `no_graph` checkpoint by `0.001334 ± 0.000412`, with
+five of five positive differences. The gain is `0.002302 ± 0.000711` on the
+112 nodes with incoming upstream edges, while the 126 headwater predictions
+remain exactly unchanged. The largest horizon-band gain is at days 15--30
+(`+0.003773`). These are validation increments, not causal effects; the
+held-out test split remains unopened.
 
-The anchored learned-lag screen has not exceeded this candidate, so learned
-lag remains an unvalidated mechanism rather than part of the current empirical
-claim. Exact evidence and limitations are in `docs/core_result.md`.
+The horizon gate independently adds `0.000232 ± 0.000248` macro NSE with five
+of five positive seed differences. The bounded learned-lag stage is technically
+validation-best, but its independent increment is only
+`0.00000327 ± 0.00000235`; global peak-bias lags are inconsistent across seeds.
+The empirical claim is therefore a stable directed-graph benefit, not recovered
+physical travel time. Exact evidence and limitations are in
+`docs/core_result.md`.
 
 The five-seed checkpoint audit also shows a predeclared horizon pattern:
-days 1--7 lose `0.001089` NSE on average, whereas days 8--14 and 15--30 gain
-`0.001242` and `0.003537`. The optional `linear` horizon gate therefore applies
+days 1--7 originally lost `0.001089` NSE on average, whereas days 8--14 and
+15--30 gained `0.001242` and `0.003537`. The selected `linear` horizon gate
+reduces the final days 1--7 difference to `-0.000068` while the days 8--14 and
+15--30 gains reach `0.001340` and `0.003773`. It applies
 a two-parameter bounded scale to the already decoded upstream correction:
 
 ```text

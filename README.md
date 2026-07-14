@@ -68,9 +68,9 @@ For the contracted artifact, replace both overrides with `data=china_real_daily_
 
 ## Contracted real-data attributable graph gain
 
-The current core result uses five paired seeds on the 238-node, 237-edge contracted graph. Each directed model starts from its own validation-selected `no_graph` checkpoint; the local encoder, GRU, and decoder are frozen, upstream output heads start at zero, and only the upstream residual path is trained. Directed upstream information improves validation macro NSE by `0.001101 ± 0.000255` across seeds (`5/5` positive). On the 112 nodes that can actually receive upstream messages, the mean gain is `0.001914 ± 0.000457`; all 126 headwater predictions remain bitwise unchanged. Gains are largest at days 15–30 (`+0.003537` macro NSE). The held-out test set remains unopened.
+The current core result uses five paired seeds on the 238-node, 237-edge contracted graph. Each directed model starts from its own validation-selected `no_graph` checkpoint; the local encoder, GRU, and decoder are frozen, upstream output heads start at zero, and only the upstream residual path is trained. The zero-started horizon gate and bounded learned-lag refinement then strictly nest and freeze their selected predecessor. The final candidate improves validation macro NSE by `0.001334 ± 0.000412` across seeds (`5/5` positive). On the 112 nodes that can actually receive upstream messages, the mean gain is `0.002302 ± 0.000711`; all 126 headwater predictions remain bitwise unchanged. Gains are largest at days 15–30 (`+0.003773` macro NSE). The held-out test set remains unopened.
 
-![Contracted real-data attributable graph gain](docs/figures/real_contracted_graph_gain_v9.png)
+![Contracted real-data attributable graph gain](docs/figures/real_contracted_core_v11.png)
 
 Reproduce the checkpoint-level audit, node table, and PNG/PDF figure with:
 
@@ -78,7 +78,7 @@ Reproduce the checkpoint-level audit, node table, and PNG/PDF figure with:
 conda run -n DeepWater python -m RiverLagNet.cli.summarize_graph_gain --device cuda
 ```
 
-See the [core result](docs/core_result.md), [machine-readable summary](experiments/real_contracted_graph_gain_v9_summary.json), and [node-level gains](experiments/real_contracted_graph_gain_v9_nodes.csv). Learned lag is not claimed as validated: the best current candidate is the attributable directed current-upstream residual, while the anchored learned-lag seed-42 screen remained below `no_lag`.
+See the [core result](docs/core_result.md), [machine-readable summary](experiments/real_contracted_core_v11_summary.json), and [node-level gains](experiments/real_contracted_core_v11_nodes.csv). The horizon gate adds `0.000232 ± 0.000248` NSE (`5/5` positive). Learned lag adds only `0.00000327 ± 0.00000235`; its peak bias lag is inconsistent across seeds, so stable travel-time recovery is not claimed.
 
 ## Train
 

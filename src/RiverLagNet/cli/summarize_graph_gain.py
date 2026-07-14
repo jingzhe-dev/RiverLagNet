@@ -32,22 +32,22 @@ def main() -> None:
     parser.add_argument(
         "--summary-output",
         type=Path,
-        default=Path("experiments/real_contracted_graph_gain_v9_summary.json"),
+        default=Path("experiments/real_contracted_core_v11_summary.json"),
     )
     parser.add_argument(
         "--node-output",
         type=Path,
-        default=Path("experiments/real_contracted_graph_gain_v9_nodes.csv"),
+        default=Path("experiments/real_contracted_core_v11_nodes.csv"),
     )
     parser.add_argument(
         "--png-output",
         type=Path,
-        default=Path("docs/figures/real_contracted_graph_gain_v9.png"),
+        default=Path("docs/figures/real_contracted_core_v11.png"),
     )
     parser.add_argument(
         "--pdf-output",
         type=Path,
-        default=Path("docs/figures/real_contracted_graph_gain_v9.pdf"),
+        default=Path("docs/figures/real_contracted_core_v11.pdf"),
     )
     parser.add_argument("--device", choices=("cpu", "cuda"), default=None)
     args = parser.parse_args()
