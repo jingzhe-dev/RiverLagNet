@@ -2,6 +2,15 @@
 
 RiverLagNet is a daily, multi-station water-quality forecasting system centered on **Directed Lag-aware River Message Passing**. It predicts `NH3N`, `CODMn`, and `TP` for the next 30 days from 90 historical days while preserving explicit upstream-to-downstream river direction and discrete travel lags.
 
+The active architecture research adds **Causal Multi-hop Lagged History
+Diffusion (CMLHD)**: encoded 27-variable upstream histories are shifted by each
+edge's travel-time prior and diffused for multiple directed hops *before* the
+node GRU. This solves the post-encoding bottleneck in which local GRUs may
+discard transient upstream transport signals before graph interaction. The
+operator is past-only and zero-initialized, so residual training starts exactly
+from the paired no-graph forecast and keeps headwater predictions unchanged.
+See [architecture](docs/architecture.md) for the equations and scope.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

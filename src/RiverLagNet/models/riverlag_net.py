@@ -9,6 +9,7 @@ from RiverLagNet.data.graph_builder import build_graph_variant
 
 from .decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
 from .fusion import BoundedLinearHorizonGate, LocalUpstreamGatedFusion
+from .history_propagation import DirectedLaggedHistoryPropagation
 from .input_encoder import InputMaskEncoder
 from .lag_message_passing import DirectedLagAwareMessagePassing
 from .output_transport import DirectedLaggedOutputTransport
@@ -49,9 +50,14 @@ class RiverLagNet(nn.Module):
             raise ValueError("unsupported graph_variant")
         if horizon_gate_mode not in {"none", "linear"}:
             raise ValueError("horizon_gate_mode must be none or linear")
-        if propagation_mode not in {"legacy", "trajectory", "output_transport"}:
+        if propagation_mode not in {
+            "legacy",
+            "trajectory",
+            "output_transport",
+            "history",
+        }:
             raise ValueError(
-                "propagation_mode must be legacy, trajectory, or output_transport"
+                "propagation_mode must be legacy, trajectory, output_transport, or history"
             )
         if topology_mode not in {"none", "structural"}:
             raise ValueError("topology_mode must be none or structural")
@@ -107,6 +113,17 @@ class RiverLagNet(nn.Module):
             if propagation_mode == "output_transport"
             else None
         )
+        self.history_propagation = (
+            DirectedLaggedHistoryPropagation(
+                hidden_dim,
+                edge_dim,
+                max_lag,
+                steps=trajectory_steps,
+                dropout=dropout,
+            )
+            if propagation_mode == "history"
+            else None
+        )
         self.topology_encoder = (
             DirectedTopologyEncoder(hidden_dim)
             if topology_mode == "structural"
@@ -126,11 +143,16 @@ class RiverLagNet(nn.Module):
         for module in (self.input_encoder, self.temporal_encoder, self.decoder):
             for parameter in module.parameters():
                 parameter.requires_grad_(False)
-        if self.propagation_mode == "output_transport":
+        if self.propagation_mode in {"output_transport", "history"}:
             for parameter in self.parameters():
                 parameter.requires_grad_(False)
-            assert self.output_transport is not None
-            for parameter in self.output_transport.parameters():
+            residual_module = (
+                self.output_transport
+                if self.propagation_mode == "output_transport"
+                else self.history_propagation
+            )
+            assert residual_module is not None
+            for parameter in residual_module.parameters():
                 parameter.requires_grad_(True)
             return
         with torch.no_grad():
@@ -193,6 +215,19 @@ class RiverLagNet(nn.Module):
     ) -> Tensor:
         """Return `y_hat [B,T_out,N,3]`."""
         encoded = self.input_encoder(x, x_mask, x_quality, static, time_features)
+        variant_edges: Tensor | None = None
+        variant_attr: Tensor | None = None
+        if self.graph_variant != "no_graph":
+            variant_edges, variant_attr = build_graph_variant(
+                edge_index, edge_attr, self.graph_variant, self.graph_seed
+            )
+        if self.graph_variant != "no_graph" and self.propagation_mode == "history":
+            assert self.history_propagation is not None
+            assert variant_edges is not None and variant_attr is not None
+            encoded, routing = self.history_propagation(
+                encoded, variant_edges, variant_attr
+            )
+            self.attention_weights = routing
         h_seq, h_local = self.temporal_encoder(encoded)
         if self.graph_variant != "no_graph" and self.topology_encoder is not None:
             topology = self.topology_encoder(edge_index, edge_attr, h_local.shape[1])
@@ -204,9 +239,9 @@ class RiverLagNet(nn.Module):
             self.attention_weights = None
             return local_prediction
         else:
-            variant_edges, variant_attr = build_graph_variant(
-                edge_index, edge_attr, self.graph_variant, self.graph_seed
-            )
+            assert variant_edges is not None and variant_attr is not None
+            if self.propagation_mode == "history":
+                return local_prediction
             if self.propagation_mode == "output_transport":
                 assert self.output_transport is not None
                 transported, routing = self.output_transport(

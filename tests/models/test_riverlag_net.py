@@ -280,3 +280,41 @@ def test_structural_topology_mode_zero_starts_without_changing_predictions() -> 
     }
 
     assert torch.equal(structural(**inputs), base(**inputs))
+
+
+def test_history_mode_zero_starts_and_trains_only_causal_history_diffusion() -> None:
+    torch.manual_seed(37)
+    model = RiverLagNet(
+        value_dim=5,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=4,
+        graph_variant="directed",
+        lag_mode="no_lag",
+        propagation_mode="history",
+        trajectory_steps=2,
+    ).eval()
+    inputs = {
+        "x": torch.randn(2, 8, 4, 5),
+        "x_mask": torch.ones(2, 8, 4, 5, dtype=torch.bool),
+        "x_quality": torch.ones(2, 8, 4, 5),
+        "static": torch.randn(4, 2),
+        "edge_index": torch.tensor([[0, 1, 1], [1, 2, 3]]),
+        "edge_attr": torch.tensor(
+            [[4.0, 0.1, 1.0], [3.0, 0.2, 2.0], [2.0, 0.3, 1.0]]
+        ),
+        "time_features": torch.randn(2, 8, 4),
+    }
+
+    model.configure_upstream_residual_training()
+    directed = model(**inputs)
+    model.graph_variant = "no_graph"
+    local = model(**inputs)
+    trainable = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+
+    assert torch.equal(directed, local)
+    assert all(name.startswith("history_propagation.") for name in trainable)
+    assert trainable

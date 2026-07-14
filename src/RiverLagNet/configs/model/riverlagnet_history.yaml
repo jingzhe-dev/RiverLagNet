@@ -1,0 +1,16 @@
+name: riverlagnet
+hidden_dim: 64
+target_dim: 3
+max_lag: 30
+graph_variant: directed
+lag_mode: no_lag
+dropout: 0.1
+graph_seed: ${seed}
+lag_prior_scale_days: 1.0
+lag_prior_strength: 0.0
+lag_residual_max_mix: 1.0
+lag_bias_mode: none
+horizon_gate_mode: none
+propagation_mode: history
+trajectory_steps: 8
+topology_mode: none

@@ -29,6 +29,69 @@ values + mask + quality + static + calendar features
 
 The GRU is a local temporal encoder, not the principal innovation. The graph module only propagates along the supplied upstream-to-downstream edges.
 
+## Algorithmic innovation: Causal Multi-hop Lagged History Diffusion
+
+The current 15% gain research branch introduces **Causal Multi-hop Lagged
+History Diffusion (CMLHD)**. It targets a specific information bottleneck in
+the original architecture: when every station first compresses its own 90-day,
+27-variable history into one GRU state, short-lived upstream water-quality,
+meteorological, soil-water, and discharge signals may be irreversibly lost
+before river-network interaction begins.
+
+CMLHD therefore operates between `InputMaskEncoder` and `NodeTemporalGRU`:
+
+```text
+27-variable values + masks + quality + static + calendar
+                            │
+                            ▼
+                    InputMaskEncoder
+                            │ e^(0) [B,90,N,D]
+                            ▼
+       Causal Multi-hop Lagged History Diffusion
+          upstream only + travel-time alignment
+                            │ e^(K) [B,90,N,D]
+                            ▼
+                    NodeTemporalGRU
+                            ▼
+             direct 30-day multi-target decoder
+```
+
+For edge `j → i`, rounded travel lag `l_ji`, history time `t`, and diffusion
+step `k`, the upstream state is
+
+```text
+u_i,t^(k) = mean_(j in Up(i), t-l_ji>=0)
+            sigmoid(g(edge_ji)) ⊙ W e_j,t-l_ji^(k-1)
+
+e_i,t^(k) = e_i,t^(k-1)
+            + 1[valid upstream] F([e_i,t^(0), e_i,t^(k-1), u_i,t^(k)])
+```
+
+Repeating the shared operator `K` times expands the receptive field to `K`
+directed upstream hops while accumulating edge travel time. A source index
+before the start of the 90-day input window is masked; it is not clamped to an
+artificial boundary value. Reverse edges are never created in the directed
+condition. The final layer of `F` is initialized to exactly zero, so a
+warm-started CMLHD model is bitwise identical to its paired no-graph local
+forecaster. Residual-stage training freezes the local input encoder, GRU, and
+decoder and updates only CMLHD. Consequently, any paired validation change is
+attributable to the new upstream-history pathway rather than a retrained local
+backbone.
+
+The method addresses four concrete problems:
+
+1. **Post-encoding information loss:** upstream 27-variable histories enter
+   before temporal compression rather than after it.
+2. **Travel-time misalignment:** every edge reads `t-l_ji`, not the source and
+   destination values from the same day.
+3. **Insufficient graph depth:** repeated diffusion exposes multi-hop upstream
+   histories without flattening time, node, or variable axes.
+4. **Unattributable graph gains:** zero-start residual nesting preserves the
+   exact no-graph prediction at initialization and keeps headwaters unchanged.
+
+CMLHD remains a predictive association model. Its learned gates are routing
+preferences and must not be interpreted as causal pollutant contributions.
+
 ## Joint directed lag attention
 
 For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:
