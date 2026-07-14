@@ -49,7 +49,10 @@ For `learned_lag`, the routed state is parameterized as the latest observable
 upstream state plus a learned scalar multiple of the attention-weighted lag
 difference. The scalar is zero-initialized and passed through `tanh`, so the
 full model starts from the empirically stronger current-upstream path and must
-earn any departure toward historical states on validation data.
+earn any departure toward historical states on validation data. A configurable
+`lag_residual_max_mix` bounds the magnitude of that departure between zero and
+one; cap experiments must be recorded rather than silently changing the
+default.
 Softmax is computed jointly over every incoming edge and available lag for
 each destination and horizon. Consequently, each candidate set sums to one. A
 node with no incoming edges receives an exact zero upstream state.

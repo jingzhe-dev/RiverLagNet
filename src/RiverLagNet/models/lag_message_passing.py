@@ -26,6 +26,7 @@ class DirectedLagAwareMessagePassing(nn.Module):
         dropout: float = 0.0,
         prior_scale_days: float = 1.0,
         prior_strength: float = 8.0,
+        lag_residual_max_mix: float = 1.0,
     ) -> None:
         super().__init__()
         if lag_mode not in LAG_MODES:
@@ -34,11 +35,14 @@ class DirectedLagAwareMessagePassing(nn.Module):
             raise ValueError("prior_scale_days must be positive")
         if prior_strength < 0:
             raise ValueError("prior_strength cannot be negative")
+        if not 0.0 <= lag_residual_max_mix <= 1.0:
+            raise ValueError("lag_residual_max_mix must be between zero and one")
         self.hidden_dim = hidden_dim
         self.max_lag = max_lag
         self.lag_mode = lag_mode
         self.prior_scale_days = prior_scale_days
         self.prior_strength = prior_strength
+        self.lag_residual_max_mix = lag_residual_max_mix
         self.message_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.edge_encoder = nn.Linear(edge_dim, hidden_dim)
         self.lag_embedding = nn.Embedding(max_lag + 1, hidden_dim)
@@ -101,7 +105,9 @@ class DirectedLagAwareMessagePassing(nn.Module):
             attention[:, incoming] = normalized.reshape(batch, int(incoming.sum()), lag_count)
         messages = self.message_projection(source_states)
         if self.lag_mode == "learned_lag":
-            lag_mix = torch.tanh(self.lag_residual_scale).to(messages.dtype)
+            lag_mix = (
+                self.lag_residual_max_mix * torch.tanh(self.lag_residual_scale)
+            ).to(messages.dtype)
             current_messages = messages[:, :, :1]
             messages = current_messages + lag_mix * (messages - current_messages)
         message_weights = self.dropout(attention).to(messages.dtype)
@@ -196,7 +202,9 @@ class DirectedLagAwareMessagePassing(nn.Module):
 
         messages = self.message_projection(source_states)
         if self.lag_mode == "learned_lag":
-            lag_mix = torch.tanh(self.lag_residual_scale).to(messages.dtype)
+            lag_mix = (
+                self.lag_residual_max_mix * torch.tanh(self.lag_residual_scale)
+            ).to(messages.dtype)
             current_messages = messages[:, :, :, :1]
             messages = current_messages + lag_mix * (messages - current_messages)
         message_weights = self.dropout(attention).to(messages.dtype)

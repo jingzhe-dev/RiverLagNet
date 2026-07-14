@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from RiverLagNet.models.lag_message_passing import DirectedLagAwareMessagePassing
@@ -54,7 +55,12 @@ def test_learned_attention_sums_to_one_per_destination_over_edges_and_lags() -> 
 
 def test_learned_lag_zero_starts_from_current_upstream_state() -> None:
     module = DirectedLagAwareMessagePassing(
-        1, edge_dim=1, max_lag=2, lag_mode="learned_lag", prior_strength=0.0
+        1,
+        edge_dim=1,
+        max_lag=2,
+        lag_mode="learned_lag",
+        prior_strength=0.0,
+        lag_residual_max_mix=0.1,
     )
     _make_uniform(module)
     h_seq = torch.tensor(
@@ -71,7 +77,13 @@ def test_learned_lag_zero_starts_from_current_upstream_state() -> None:
     with torch.no_grad():
         module.lag_residual_scale.fill_(10.0)
     lagged, _ = module(h_seq, h_seq[:, -1], edges, torch.zeros(1, 1))
-    assert torch.allclose(lagged[0, 1], torch.tensor([4.0]), atol=1e-3)
+    assert torch.allclose(lagged[0, 1], torch.tensor([8.5]), atol=1e-3)
+
+
+def test_lag_residual_max_mix_must_be_a_fraction() -> None:
+    for invalid in (-0.1, 1.1):
+        with pytest.raises(ValueError, match="between zero and one"):
+            DirectedLagAwareMessagePassing(2, edge_dim=1, lag_residual_max_mix=invalid)
 
 
 def test_training_dropout_does_not_change_reported_attention_normalization() -> None:

@@ -33,6 +33,7 @@ class RiverLagNet(nn.Module):
         graph_seed: int = 42,
         lag_prior_scale_days: float = 1.0,
         lag_prior_strength: float = 8.0,
+        lag_residual_max_mix: float = 1.0,
         **_: object,
     ) -> None:
         super().__init__()
@@ -51,6 +52,7 @@ class RiverLagNet(nn.Module):
             dropout,
             lag_prior_scale_days,
             lag_prior_strength,
+            lag_residual_max_mix,
         )
         self.fusion = LocalUpstreamGatedFusion(hidden_dim)
         self.decoder = MultiHorizonMultiTargetDecoder(hidden_dim, output_window, target_dim)

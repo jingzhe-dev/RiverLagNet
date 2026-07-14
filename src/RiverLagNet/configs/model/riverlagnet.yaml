@@ -8,3 +8,4 @@ dropout: 0.1
 graph_seed: ${seed}
 lag_prior_scale_days: 1.0
 lag_prior_strength: 8.0
+lag_residual_max_mix: 1.0
