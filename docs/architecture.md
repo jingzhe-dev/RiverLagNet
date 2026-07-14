@@ -92,6 +92,93 @@ The method addresses four concrete problems:
 CMLHD remains a predictive association model. Its learned gates are routing
 preferences and must not be interpreted as causal pollutant contributions.
 
+## RiverGraph CrossFormer: attention and Transformer–GNN fusion innovations
+
+`RiverGraphCrossFormer` is the v0.2 research architecture. It retains CMLHD
+for an eight-hop upstream receptive field and adds two coupled algorithmic
+innovations requested for the attention and fusion stages:
+
+```text
+mask-aware 27-variable history
+              │
+              ▼
+  CMLHD directed lag diffusion ── multi-hop upstream history
+              │
+              ▼
+ node-wise Temporal Transformer ── local temporal query q_i,h
+              │
+              ├─────────────────────────────────────┐
+              ▼                                     ▼
+       local 30-day decoder        Edge–Lag–Horizon Sparse Attention
+                                                    │ routing-head tokens
+                                                    ▼
+                                  Transformer–GNN Cross Fusion
+                                                    │ zero-start residual
+              └─────────────────────── + ───────────┘
+                                      ▼
+                              y_hat [B,30,N,3]
+```
+
+### Innovation 1: Edge–Lag–Horizon Sparse Attention (ELHSA)
+
+**Problem.** Ordinary GAT attention selects neighbors at one timestamp and
+ordinary Transformer attention ignores river direction. Both can assign
+weight to a downstream node, an impossible future source state, or a lag that
+is inconsistent with the forecast lead. A dense softmax also spreads positive
+mass over every candidate, making the learned routing hard to isolate.
+
+**Method.** For destination `i`, lead `h`, upstream edge `j→i`, lag `τ`, and
+routing head `r`, ELHSA scores only candidates satisfying `τ ≥ h`:
+
+```text
+s_ijhτr = <Q_r q_i,h,
+            K_r e_j,t+h-τ + E_r(edge_ji) + L_τr> / sqrt(d_r)
+           + b_r(edge_ji)
+           - (τ - travel_time_ji)^2 / (2 sigma_r^2)
+
+alpha_i,h,r = sparsemax_{j in Up(i), τ≥h}(s_ijhτr)
+```
+
+The joint normalization domain is the Cartesian set of all incoming edges and
+all causally observable lags for one destination, horizon, and head. Sparsemax
+can set unneeded edge-lag routes to exact zero. `travel_time_prior_days` is a
+soft Gaussian anchor with a learned head-specific scale, not a hard label; the
+query-key term can move attention away from it when training evidence supports
+another lag. Nodes without incoming edges receive exact zero graph context.
+
+ELHSA therefore solves direction leakage, future leakage, horizon/lag
+misalignment, and dense attention dilution in one normalized operator. Its
+weights remain predictive routing preferences, not causal effect estimates.
+
+### Innovation 2: Transformer–GNN Head Cross Fusion (TGCF)
+
+**Problem.** A serial `Transformer → GNN` stack forces the GNN output to modify
+all temporal representations in the same way; concatenation treats local and
+upstream features as interchangeable. Both approaches obscure whether a
+specific temporal state actually needs a specific river-routing mechanism.
+
+**Method.** The Temporal Transformer produces the local destination query
+`q_i,h`. ELHSA produces one upstream token `g_i,h,r` per graph-routing head.
+TGCF performs a second, head-level cross-attention:
+
+```text
+beta_i,h,r = softmax_r(<W_q q_i,h, W_g,r g_i,h,r> / sqrt(D))
+g_i,h = sum_r beta_i,h,r W_g,r g_i,h,r
+z_i,h = sigmoid(G[q_i,h, g_i,h]) ⊙ W_z g_i,h
+y_hat_i,h = y_local_i,h + decoder_upstream(z_i,h)
+```
+
+This makes the Transformer state the query and the GNN routing heads the
+key/value tokens: fusion is conditional on node, forecast lead, and temporal
+state rather than a fixed addition. The upstream output heads start at zero,
+so the complete graph model initially equals its no-graph Transformer. A
+headwater has no valid GNN token and its fused residual remains exactly zero.
+
+Together, CMLHD + ELHSA + TGCF form a specific solution to the project
+question: preserve transient upstream covariates before temporal compression,
+select physically admissible edge-lag routes for each prediction lead, and
+inject them only when the local Transformer query requests that routing head.
+
 ## Joint directed lag attention
 
 For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:

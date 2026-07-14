@@ -11,6 +11,15 @@ operator is past-only and zero-initialized, so residual training starts exactly
 from the paired no-graph forecast and keeps headwater predictions unchanged.
 See [architecture](docs/architecture.md) for the equations and scope.
 
+The v0.2 candidate `model=river_crossformer` adds two further innovations.
+**Edge–Lag–Horizon Sparse Attention (ELHSA)** jointly normalizes upstream edges
+and causally observable travel lags for every forecast lead using sparsemax and
+a soft travel-time prior. **Transformer–GNN Head Cross Fusion (TGCF)** uses the
+local Temporal Transformer state as a query over GNN routing-head tokens, so
+graph information is injected conditionally rather than concatenated or added
+uniformly. The paired `model.graph_variant=no_graph` condition retains the same
+Transformer backbone and training budget.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

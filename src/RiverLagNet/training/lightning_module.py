@@ -12,6 +12,7 @@ from torch import Tensor, nn
 from RiverLagNet.data.datamodule import DataSpec
 from RiverLagNet.data.schema import TARGET_NAMES
 from RiverLagNet.models.baselines import PersistenceModel, StationGRU, StaticDirectedGAT
+from RiverLagNet.models.river_crossformer import RiverGraphCrossFormer
 from RiverLagNet.models.riverlag_net import RiverLagNet
 
 from .losses import masked_huber_loss, masked_nse_loss
@@ -23,6 +24,7 @@ MODEL_TYPES = {
     "station_gru": StationGRU,
     "static_gat": StaticDirectedGAT,
     "riverlagnet": RiverLagNet,
+    "river_crossformer": RiverGraphCrossFormer,
 }
 MODEL_INPUT_KEYS = (
     "x",
