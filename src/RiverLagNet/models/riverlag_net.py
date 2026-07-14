@@ -12,6 +12,7 @@ from .fusion import BoundedLinearHorizonGate, LocalUpstreamGatedFusion
 from .input_encoder import InputMaskEncoder
 from .lag_message_passing import DirectedLagAwareMessagePassing
 from .temporal_gru import NodeTemporalGRU
+from .trajectory_propagation import DirectedTrajectoryPropagation
 
 
 class RiverLagNet(nn.Module):
@@ -36,6 +37,8 @@ class RiverLagNet(nn.Module):
         lag_residual_max_mix: float = 1.0,
         lag_bias_mode: str = "none",
         horizon_gate_mode: str = "none",
+        propagation_mode: str = "legacy",
+        trajectory_steps: int = 4,
         **_: object,
     ) -> None:
         super().__init__()
@@ -43,10 +46,13 @@ class RiverLagNet(nn.Module):
             raise ValueError("unsupported graph_variant")
         if horizon_gate_mode not in {"none", "linear"}:
             raise ValueError("horizon_gate_mode must be none or linear")
+        if propagation_mode not in {"legacy", "trajectory"}:
+            raise ValueError("propagation_mode must be legacy or trajectory")
         self.graph_variant = graph_variant
         self.graph_seed = graph_seed
         self.output_window = output_window
         self.horizon_gate_mode = horizon_gate_mode
+        self.propagation_mode = propagation_mode
         self._horizon_calibration_only = False
         self._lag_refinement_only = False
         self.input_encoder = InputMaskEncoder(value_dim, static_dim, time_dim, hidden_dim)
@@ -68,6 +74,17 @@ class RiverLagNet(nn.Module):
         self.horizon_gate = (
             BoundedLinearHorizonGate(output_window)
             if horizon_gate_mode == "linear"
+            else None
+        )
+        self.trajectory_propagation = (
+            DirectedTrajectoryPropagation(
+                hidden_dim,
+                edge_dim,
+                max_lag,
+                steps=trajectory_steps,
+                dropout=dropout,
+            )
+            if propagation_mode == "trajectory"
             else None
         )
         self.attention_weights: Tensor | None = None
@@ -145,8 +162,8 @@ class RiverLagNet(nn.Module):
         """Return `y_hat [B,T_out,N,3]`."""
         encoded = self.input_encoder(x, x_mask, x_quality, static, time_features)
         h_seq, h_local = self.temporal_encoder(encoded)
-        local_by_horizon = h_local[:, None].expand(-1, self.output_window, -1, -1)
-        local_prediction = self.decoder(local_by_horizon)
+        local_context = self.decoder.contextualize(h_local)
+        local_prediction = self.decoder.decode_context(local_context)
         if self.graph_variant == "no_graph":
             self.attention_weights = None
             return local_prediction
@@ -154,16 +171,24 @@ class RiverLagNet(nn.Module):
             variant_edges, variant_attr = build_graph_variant(
                 edge_index, edge_attr, self.graph_variant, self.graph_seed
             )
-            h_upstream, attention = self.message_passing.forward_horizons(
-                h_seq,
-                h_local,
-                variant_edges,
-                variant_attr,
-                output_window=self.output_window,
-            )
-            self.attention_weights = attention
-            fused = self.fusion(local_by_horizon, h_upstream)
-        upstream_state = fused - local_by_horizon
+            if self.propagation_mode == "trajectory":
+                assert self.trajectory_propagation is not None
+                propagated, routing = self.trajectory_propagation(
+                    local_context, h_seq, variant_edges, variant_attr
+                )
+                self.attention_weights = routing
+                upstream_state = propagated - local_context
+            else:
+                h_upstream, attention = self.message_passing.forward_horizons(
+                    h_seq,
+                    h_local,
+                    variant_edges,
+                    variant_attr,
+                    output_window=self.output_window,
+                )
+                self.attention_weights = attention
+                fused = self.fusion(local_context, h_upstream)
+                upstream_state = fused - local_context
         upstream_correction = self.upstream_decoder(upstream_state)
         if self.horizon_gate is not None:
             upstream_correction = self.horizon_gate(upstream_correction)

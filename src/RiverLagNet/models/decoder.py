@@ -16,8 +16,8 @@ class MultiHorizonMultiTargetDecoder(nn.Module):
         self.shared = nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.SiLU())
         self.heads = nn.ModuleList(nn.Linear(hidden_dim, 1) for _ in range(target_dim))
 
-    def forward(self, node_state: Tensor) -> Tensor:
-        """Decode shared `[B,N,D]` or horizon-specific `[B,T_out,N,D]` states."""
+    def contextualize(self, node_state: Tensor) -> Tensor:
+        """Add lead embeddings and return ``[B,T_out,N,D]`` contexts."""
         if node_state.ndim == 3:
             context = node_state[:, None] + self.horizon_embedding[None, :, None]
         elif node_state.ndim == 4:
@@ -26,8 +26,18 @@ class MultiHorizonMultiTargetDecoder(nn.Module):
             context = node_state + self.horizon_embedding[None, :, None]
         else:
             raise ValueError("node_state must have shape [B,N,D] or [B,T_out,N,D]")
+        return context
+
+    def decode_context(self, context: Tensor) -> Tensor:
+        """Decode an already contextualized ``[B,T_out,N,D]`` trajectory."""
+        if context.ndim != 4 or context.shape[1] != self.horizon_embedding.shape[0]:
+            raise ValueError("context must have shape [B,T_out,N,D]")
         decoded = self.shared(context)
         return torch.cat([head(decoded) for head in self.heads], dim=-1)
+
+    def forward(self, node_state: Tensor) -> Tensor:
+        """Decode shared `[B,N,D]` or horizon-specific `[B,T_out,N,D]` states."""
+        return self.decode_context(self.contextualize(node_state))
 
 
 class UpstreamResidualDecoder(nn.Module):

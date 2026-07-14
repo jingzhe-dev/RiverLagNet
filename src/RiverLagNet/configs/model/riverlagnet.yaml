@@ -11,3 +11,5 @@ lag_prior_strength: 8.0
 lag_residual_max_mix: 1.0
 lag_bias_mode: none
 horizon_gate_mode: none
+propagation_mode: legacy
+trajectory_steps: 4

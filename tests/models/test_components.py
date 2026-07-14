@@ -32,6 +32,16 @@ def test_decoder_accepts_horizon_specific_node_states() -> None:
     assert output.shape == (2, 7, 5, 3)
 
 
+def test_decoder_context_methods_reconstruct_regular_forward() -> None:
+    decoder = MultiHorizonMultiTargetDecoder(hidden_dim=10, output_window=7, target_dim=3)
+    state = torch.randn(2, 5, 10)
+
+    context = decoder.contextualize(state)
+
+    assert context.shape == (2, 7, 5, 10)
+    assert torch.equal(decoder.decode_context(context), decoder(state))
+
+
 def test_upstream_residual_decoder_is_exactly_zero_without_upstream_state() -> None:
     decoder = UpstreamResidualDecoder(hidden_dim=10, target_dim=3)
 

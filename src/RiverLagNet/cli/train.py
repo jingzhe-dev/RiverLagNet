@@ -55,7 +55,12 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
         "model.horizon_gate.normalized_lead",
         "model.message_passing.lag_offset_bias",
     }
-    unexpected_missing = set(incompatible.missing_keys) - allowed_missing
+    unexpected_missing = {
+        name
+        for name in incompatible.missing_keys
+        if name not in allowed_missing
+        and not name.startswith("model.trajectory_propagation.")
+    }
     if unexpected_missing or incompatible.unexpected_keys:
         raise ValueError(
             "warm-start checkpoint is incompatible: "

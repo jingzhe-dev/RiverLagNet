@@ -77,3 +77,4 @@
 - 2026-07-14｜两阶段 smoke 首次因 checkpoint 文件名中的 `=` 无法通过 Hydra 覆盖语法｜把带 `epoch=...-val_nse=...` 的路径直接作为未转义配置值｜对路径内两个等号使用 Hydra 反斜杠转义后真实 checkpoint 加载和单 batch 训练成功｜CLI 传递 Lightning checkpoint 路径时预先转义 Hydra 保留字符
 - 2026-07-14｜核查静态 GAT 构造逻辑时读取了不存在的 `models/factory.py`｜未先确认 `build_model` 的实际定义位置便假定了常见工厂文件名｜改为从检索结果读取 `training/lightning_module.py` 并完成 checkpoint 结构核查｜先用 `rg -n "def build_model"` 定位定义，再读取返回的真实路径
 - 2026-07-14｜接入1068节点数据配置前把不存在的 `tests/cli` 目录传给 `rg`｜未先枚举当前测试树便沿用常见目录假设｜改用 `rg --files tests` 定位真实测试与配置同步检查｜检索测试文件前先枚举，禁止猜测目录
+- 2026-07-14｜1068节点轨迹传播 smoke 的 warm-start 覆盖被 Hydra lexer 拒绝｜虽转义 checkpoint 文件名中的等号，仍传入了含 Windows 盘符冒号的绝对路径｜改用仓库内相对正斜杠路径并保留等号转义后重跑｜Hydra checkpoint 覆盖统一使用相对 POSIX 风格路径
