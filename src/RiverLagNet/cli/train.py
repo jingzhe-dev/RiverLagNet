@@ -54,6 +54,7 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
                 "model.fusion.",
                 "model.upstream_decoder.",
                 "model.trajectory_propagation.",
+                "model.output_transport.",
                 "model.topology_encoder.",
             )
         )
@@ -72,6 +73,7 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
         for name in incompatible.missing_keys
         if name not in allowed_missing
         and not name.startswith("model.trajectory_propagation.")
+        and not name.startswith("model.output_transport.")
         and not name.startswith("model.topology_encoder.")
         and not (
             station_only_checkpoint

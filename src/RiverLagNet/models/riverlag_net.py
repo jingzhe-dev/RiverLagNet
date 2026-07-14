@@ -11,6 +11,7 @@ from .decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
 from .fusion import BoundedLinearHorizonGate, LocalUpstreamGatedFusion
 from .input_encoder import InputMaskEncoder
 from .lag_message_passing import DirectedLagAwareMessagePassing
+from .output_transport import DirectedLaggedOutputTransport
 from .temporal_gru import NodeTemporalGRU
 from .topology_encoder import DirectedTopologyEncoder
 from .trajectory_propagation import DirectedTrajectoryPropagation
@@ -48,8 +49,10 @@ class RiverLagNet(nn.Module):
             raise ValueError("unsupported graph_variant")
         if horizon_gate_mode not in {"none", "linear"}:
             raise ValueError("horizon_gate_mode must be none or linear")
-        if propagation_mode not in {"legacy", "trajectory"}:
-            raise ValueError("propagation_mode must be legacy or trajectory")
+        if propagation_mode not in {"legacy", "trajectory", "output_transport"}:
+            raise ValueError(
+                "propagation_mode must be legacy, trajectory, or output_transport"
+            )
         if topology_mode not in {"none", "structural"}:
             raise ValueError("topology_mode must be none or structural")
         self.graph_variant = graph_variant
@@ -92,6 +95,18 @@ class RiverLagNet(nn.Module):
             if propagation_mode == "trajectory"
             else None
         )
+        self.output_transport = (
+            DirectedLaggedOutputTransport(
+                target_dim,
+                edge_dim,
+                max_lag,
+                steps=trajectory_steps,
+                hidden_dim=max(16, hidden_dim // 2),
+                dropout=dropout,
+            )
+            if propagation_mode == "output_transport"
+            else None
+        )
         self.topology_encoder = (
             DirectedTopologyEncoder(hidden_dim)
             if topology_mode == "structural"
@@ -111,6 +126,13 @@ class RiverLagNet(nn.Module):
         for module in (self.input_encoder, self.temporal_encoder, self.decoder):
             for parameter in module.parameters():
                 parameter.requires_grad_(False)
+        if self.propagation_mode == "output_transport":
+            for parameter in self.parameters():
+                parameter.requires_grad_(False)
+            assert self.output_transport is not None
+            for parameter in self.output_transport.parameters():
+                parameter.requires_grad_(True)
+            return
         with torch.no_grad():
             self.fusion.gate.weight.zero_()
             self.fusion.gate.bias.fill_(gate_bias)
@@ -185,6 +207,17 @@ class RiverLagNet(nn.Module):
             variant_edges, variant_attr = build_graph_variant(
                 edge_index, edge_attr, self.graph_variant, self.graph_seed
             )
+            if self.propagation_mode == "output_transport":
+                assert self.output_transport is not None
+                transported, routing = self.output_transport(
+                    local_prediction,
+                    x[..., : local_prediction.shape[-1]],
+                    x_mask[..., : local_prediction.shape[-1]],
+                    variant_edges,
+                    variant_attr,
+                )
+                self.attention_weights = routing
+                return transported
             if self.propagation_mode == "trajectory":
                 assert self.trajectory_propagation is not None
                 propagated, routing = self.trajectory_propagation(

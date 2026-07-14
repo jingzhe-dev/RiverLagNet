@@ -83,3 +83,4 @@
 - 2026-07-14｜新增主干河道 Hydra 配置后首次全量测试缺少包内镜像｜只添加了根配置，遗漏仓库现有的根配置与 `src/RiverLagNet/configs` 双份同步约束｜补齐数据和实验配置镜像后重跑全量测试｜新增 Hydra 配置时同时写入根目录与包内目录
 - 2026-07-14｜主干无图正式训练首次启动被过短的命令超时终止并记为 crash｜误把执行单元的让步时间当成 shell 命令超时，重复了已记录的长任务超时错误｜保留 crash 账本并用充足超时重跑得到正式结果｜训练命令固定使用覆盖完整训练的长超时，由执行单元负责阶段性让步
 - 2026-07-14｜Station GRU 主干基线首次无法 warm-start RiverLagNet｜沿用此前 RiverLagNet-no-graph checkpoint 的兼容假设，未覆盖独立 Station GRU 缺少图分支参数的情况｜仅对明确识别为 station-only 的 checkpoint 允许缺少图分支并增加回归测试｜更换基线模型类型后先验证 checkpoint 参数契约再启动正式实验
+- 2026-07-14｜输出输送模块首次 GPU mixed-precision smoke 因计数张量类型不一致失败｜单元测试只覆盖 float32，`torch.ones` 默认 float32 与 AMP 的 float16 累加目标冲突｜计数张量显式继承预测 dtype 并增加 float16 回归测试｜所有模型内新建浮点张量必须继承输入 device 与 dtype
