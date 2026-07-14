@@ -8,5 +8,6 @@ transformer_heads: 4
 transformer_layers: 2
 graph_heads: 4
 history_steps: 8
+max_path_hops: 8
 dropout: 0.1
 lag_prior_scale_days: 2.0

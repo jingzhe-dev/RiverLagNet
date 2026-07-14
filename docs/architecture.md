@@ -109,7 +109,7 @@ mask-aware 27-variable history
               │
               ├─────────────────────────────────────┐
               ▼                                     ▼
-       local 30-day decoder        Edge–Lag–Horizon Sparse Attention
+       local 30-day decoder      Ancestor-Path–Lag–Horizon Sparse Attention
                                                     │ routing-head tokens
                                                     ▼
                                   Transformer–GNN Cross Fusion
@@ -119,16 +119,28 @@ mask-aware 27-variable history
                               y_hat [B,30,N,3]
 ```
 
-### Innovation 1: Edge–Lag–Horizon Sparse Attention (ELHSA)
+### Innovation 1: Multi-scale Ancestor-Path–Lag–Horizon Sparse Attention (MAP-LHSA)
 
-**Problem.** Ordinary GAT attention selects neighbors at one timestamp and
+**Problem.** Ordinary GAT attention selects immediate neighbors at one timestamp and
 ordinary Transformer attention ignores river direction. Both can assign
 weight to a downstream node or a lag that is inconsistent with the forecast
 lead. Simply masking every source time after the forecast origin avoids
 leakage but creates another error: for a 20-day forecast on a 2-day edge, it
 removes the physically relevant 2-day route and forces attention onto lags of
 20 days or longer. A dense softmax also spreads positive mass over every
-candidate, making the learned routing hard to isolate.
+candidate, making the learned routing hard to isolate. Stacking many GNN
+layers is not a sufficient remedy: a distant upstream signal is repeatedly
+mixed and attenuated at every intermediate station before reaching the
+forecast target.
+
+**Multi-scale directed path construction.** MAP-LHSA enumerates valid
+upstream-to-downstream paths of one to `K=8` edges. A path `p:j→…→i` becomes
+one attention candidate with hop embedding `P_|p|`, mean non-temporal edge
+attributes, and cumulative travel time
+`T_p = sum_(e in p) travel_time_e`. Direct and distant ancestors therefore
+compete in one routing operation without reverse edges or repeated GNN
+mixing. CMLHD still uses only original one-hop edges; path expansion is
+restricted to the attention branch.
 
 **Method.** The **Observed–Forecast Bridge** defines the source candidate as
 
@@ -140,19 +152,20 @@ c_j,h,τ = e_j,t+h-τ                 if h-τ <= 0
 The first branch is an observed-history Transformer state. The second is the
 model's own upstream forecast context and never a future target. Thus a short
 travel lag remains available at every forecast lead without leakage. For
-destination `i`, upstream edge `j→i`, lag `τ`, and routing head `r`, ELHSA
+destination `i`, directed ancestor path `p:j→…→i`, lag `τ`, and routing head
+`r`, MAP-LHSA
 scores:
 
 ```text
-s_ijhτr = <Q_r q_i,h,
-            K_r c_j,h,τ + E_r(edge_ji) + L_τr> / sqrt(d_r)
-           + b_r(edge_ji)
-           - (τ - travel_time_ji)^2 / (2 sigma_r^2)
+s_pihτr = <Q_r q_i,h,
+            K_r c_j,h,τ + E_r(path_p) + P_|p|,r + L_τr> / sqrt(d_r)
+           + b_r(path_p)
+           - (τ - T_p)^2 / (2 sigma_r^2)
 
-alpha_i,h,r = sparsemax_{j in Up(i), 0≤τ≤max_lag}(s_ijhτr)
+alpha_i,h,r = sparsemax_{p in PathsTo(i), 0≤τ≤max_lag}(s_pihτr)
 ```
 
-The joint normalization domain is the Cartesian set of all incoming edges and
+The joint normalization domain is the Cartesian set of all incoming paths and
 all leakage-free observed/forecast-bridge lags for one destination, horizon,
 and head. Sparsemax can set unneeded edge-lag routes to exact zero.
 `travel_time_prior_days` is a
@@ -160,9 +173,9 @@ soft Gaussian anchor with a learned head-specific scale, not a hard label; the
 query-key term can move attention away from it when training evidence supports
 another lag. Nodes without incoming edges receive exact zero graph context.
 
-ELHSA therefore solves direction leakage, future-target leakage, short-lag
-loss at long horizons, horizon/lag misalignment, and dense attention dilution
-in one normalized operator. Its
+MAP-LHSA therefore solves direction leakage, future-target leakage, short-lag
+loss at long horizons, multi-hop attenuation, horizon/lag misalignment, and
+dense attention dilution in one normalized operator. Its
 weights remain predictive routing preferences, not causal effect estimates.
 
 ### Innovation 2: Transformer–GNN Head Cross Fusion (TGCF)
@@ -173,7 +186,7 @@ upstream features as interchangeable. Both approaches obscure whether a
 specific temporal state actually needs a specific river-routing mechanism.
 
 **Method.** The Temporal Transformer produces the local destination query
-`q_i,h`. ELHSA produces one upstream token `g_i,h,r` per graph-routing head.
+`q_i,h`. MAP-LHSA produces one upstream token `g_i,h,r` per graph-routing head.
 TGCF performs a second, head-level cross-attention:
 
 ```text
@@ -189,7 +202,7 @@ state rather than a fixed addition. The upstream output heads start at zero,
 so the complete graph model initially equals its no-graph Transformer. A
 headwater has no valid GNN token and its fused residual remains exactly zero.
 
-Together, CMLHD + ELHSA + TGCF form a specific solution to the project
+Together, CMLHD + MAP-LHSA + TGCF form a specific solution to the project
 question: preserve transient upstream covariates before temporal compression,
 select physically admissible edge-lag routes for each prediction lead, and
 inject them only when the local Transformer query requests that routing head.

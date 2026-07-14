@@ -19,7 +19,9 @@ def _inputs() -> dict[str, torch.Tensor]:
     }
 
 
-def _model(graph_variant: str = "directed") -> RiverGraphCrossFormer:
+def _model(
+    graph_variant: str = "directed", max_path_hops: int = 1
+) -> RiverGraphCrossFormer:
     return RiverGraphCrossFormer(
         value_dim=5,
         static_dim=2,
@@ -34,6 +36,7 @@ def _model(graph_variant: str = "directed") -> RiverGraphCrossFormer:
         transformer_layers=1,
         graph_heads=2,
         history_steps=2,
+        max_path_hops=max_path_hops,
         dropout=0.0,
     ).eval()
 
@@ -98,3 +101,34 @@ def test_crossformer_residual_training_freezes_local_transformer() -> None:
     assert not model.input_encoder.training
     assert not model.temporal_transformer.training
     assert not model.local_decoder.training
+
+
+def test_crossformer_expands_directed_ancestor_paths_for_attention_only() -> None:
+    model = _model("directed", max_path_hops=2)
+    inputs = _inputs()
+
+    expanded_index, expanded_attr, path_hops = model._expanded_graph(
+        inputs["edge_index"], inputs["edge_attr"]
+    )
+
+    assert expanded_index.shape == (2, 5)
+    assert expanded_attr.shape == (5, 2)
+    assert path_hops.tolist().count(1) == 3
+    assert path_hops.tolist().count(2) == 2
+    path_lookup = {
+        (int(source), int(destination), int(hops)): float(attributes[-1])
+        for source, destination, hops, attributes in zip(
+            expanded_index[0],
+            expanded_index[1],
+            path_hops,
+            expanded_attr,
+            strict=True,
+        )
+    }
+    assert path_lookup[(0, 2, 2)] == 3.0
+    assert path_lookup[(0, 3, 2)] == 2.0
+
+    output = model(**inputs)
+    assert output.shape == (2, 4, 4, 3)
+    assert model.attention_weights is not None
+    assert model.attention_weights.shape == (2, 4, 5, 5, 2)

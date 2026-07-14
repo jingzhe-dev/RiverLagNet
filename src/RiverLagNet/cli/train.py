@@ -69,6 +69,7 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
         "model.horizon_gate.slope",
         "model.horizon_gate.normalized_lead",
         "model.message_passing.lag_offset_bias",
+        "model.graph_attention.path_embedding",
     }
     unexpected_missing = {
         name

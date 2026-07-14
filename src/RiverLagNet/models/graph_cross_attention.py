@@ -40,10 +40,10 @@ class EdgeLagHorizonSparseAttention(nn.Module):
     observed upstream history. For ``h - tau > 0``, it comes from the model's
     own upstream future context, never a future target. This observed-forecast
     bridge keeps short physical travel lags available at long forecast leads.
-    Scores combine Transformer query-key similarity, edge attributes, a
-    learned lag embedding, and a soft travel-time prior. Sparsemax normalizes
-    all incoming edge-lag candidates jointly for every destination, horizon,
-    and head.
+    Scores combine Transformer query-key similarity, path attributes, a
+    learned path-hop embedding, a lag embedding, and a cumulative travel-time
+    prior. Sparsemax normalizes all incoming ancestor-path-lag candidates
+    jointly for every destination, horizon, and head.
     """
 
     def __init__(
@@ -52,17 +52,26 @@ class EdgeLagHorizonSparseAttention(nn.Module):
         edge_dim: int,
         num_heads: int = 4,
         max_lag: int = 30,
+        max_path_hops: int = 8,
         prior_scale_days: float = 2.0,
     ) -> None:
         super().__init__()
         if hidden_dim <= 0 or hidden_dim % num_heads:
             raise ValueError("hidden_dim must be positive and divisible by num_heads")
-        if edge_dim <= 0 or max_lag < 1 or prior_scale_days <= 0:
-            raise ValueError("edge_dim, max_lag, and prior scale must be positive")
+        if (
+            edge_dim <= 0
+            or max_lag < 1
+            or max_path_hops <= 0
+            or prior_scale_days <= 0
+        ):
+            raise ValueError(
+                "edge_dim, max_lag, path hops, and prior scale must be positive"
+            )
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.head_dim = hidden_dim // num_heads
         self.max_lag = max_lag
+        self.max_path_hops = max_path_hops
         self.query_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.value_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
@@ -71,7 +80,11 @@ class EdgeLagHorizonSparseAttention(nn.Module):
         self.lag_embedding = nn.Parameter(
             torch.empty(max_lag + 1, num_heads, self.head_dim)
         )
+        self.path_embedding = nn.Parameter(
+            torch.empty(max_path_hops + 1, num_heads, self.head_dim)
+        )
         nn.init.normal_(self.lag_embedding, std=0.02)
+        nn.init.normal_(self.path_embedding, std=0.02)
         inverse_softplus = math.log(math.exp(prior_scale_days) - 1.0)
         self.prior_raw_scale = nn.Parameter(
             torch.full((num_heads,), inverse_softplus)
@@ -84,6 +97,7 @@ class EdgeLagHorizonSparseAttention(nn.Module):
         source_future_states: Tensor,
         edge_index: Tensor,
         edge_attr: Tensor,
+        edge_hops: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         """Return head contexts and weights.
 
@@ -111,6 +125,12 @@ class EdgeLagHorizonSparseAttention(nn.Module):
                 batch, horizons, 0, lags, self.num_heads
             )
             return context, weights
+        if edge_hops is None:
+            edge_hops = torch.ones(
+                edges, dtype=torch.long, device=edge_index.device
+            )
+        if edge_hops.shape != (edges,) or edge_hops.dtype != torch.long:
+            raise ValueError("edge_hops must have shape [E] and torch.long dtype")
 
         source, destination = edge_index
         queries = self.query_projection(destination_queries).view(
@@ -128,6 +148,9 @@ class EdgeLagHorizonSparseAttention(nn.Module):
             candidate_keys
             + edge_key[None, None, :, None]
             + self.lag_embedding[None, None]
+            + self.path_embedding[
+                edge_hops.clamp(1, self.max_path_hops)
+            ][None, None, :, None]
         )
         edge_queries = queries[:, :, destination]
         scores = (
@@ -162,23 +185,48 @@ class EdgeLagHorizonSparseAttention(nn.Module):
             ).sum(dim=3)
             contexts[:, :, destination] = edge_context
         else:
-            for node in destination.unique(sorted=True).tolist():
-                edge_mask = destination == node
-                node_scores = scores[:, :, edge_mask]
-                flattened = node_scores.permute(0, 1, 4, 2, 3).flatten(3)
-                node_weights = sparsemax(flattened, dim=-1)
-                node_weights = node_weights.reshape(
-                    batch,
-                    horizons,
-                    self.num_heads,
-                    int(edge_mask.sum()),
-                    lags,
-                ).permute(0, 1, 3, 4, 2)
-                weights[:, :, edge_mask] = node_weights
-                node_values = candidate_values[:, :, edge_mask]
-                contexts[:, :, node] = (
-                    node_weights[..., None] * node_values
-                ).sum(dim=(2, 3))
+            max_incoming = int(incoming_count.max())
+            padded_edges = torch.zeros(
+                nodes, max_incoming, dtype=torch.long, device=edge_index.device
+            )
+            padded_valid = torch.zeros(
+                nodes, max_incoming, dtype=torch.bool, device=edge_index.device
+            )
+            node_edge_ids: list[Tensor] = []
+            for node in range(nodes):
+                edge_ids = torch.nonzero(destination == node, as_tuple=False).flatten()
+                node_edge_ids.append(edge_ids)
+                if edge_ids.numel():
+                    padded_edges[node, : edge_ids.numel()] = edge_ids
+                    padded_valid[node, : edge_ids.numel()] = True
+            padded_scores = scores[:, :, padded_edges]
+            padded_scores = padded_scores.masked_fill(
+                ~padded_valid[None, None, :, :, None, None], -1e4
+            )
+            flattened = padded_scores.permute(0, 1, 2, 5, 3, 4).flatten(4)
+            padded_weights = sparsemax(flattened, dim=-1).reshape(
+                batch,
+                horizons,
+                nodes,
+                self.num_heads,
+                max_incoming,
+                lags,
+            ).permute(0, 1, 2, 4, 5, 3)
+            padded_weights = padded_weights * padded_valid[
+                None, None, :, :, None, None
+            ].to(padded_weights.dtype)
+            padded_weights = padded_weights / padded_weights.sum(
+                dim=(3, 4), keepdim=True
+            ).clamp_min(1e-8)
+            padded_values = candidate_values[:, :, padded_edges]
+            contexts = (
+                padded_weights[..., None] * padded_values
+            ).sum(dim=(3, 4))
+            for node, edge_ids in enumerate(node_edge_ids):
+                if edge_ids.numel():
+                    weights[:, :, edge_ids] = padded_weights[
+                        :, :, node, : edge_ids.numel()
+                    ]
         return contexts, weights
 
     def _candidate_states(

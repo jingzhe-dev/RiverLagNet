@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor, nn
 
-from RiverLagNet.data.graph_builder import build_graph_variant
+from RiverLagNet.data.graph_builder import build_graph_variant, expand_directed_paths
 
 from .decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
 from .graph_cross_attention import (
@@ -22,7 +22,7 @@ class RiverGraphCrossFormer(nn.Module):
 
     The model has two coupled innovations:
 
-    1. Edge-Lag-Horizon Sparse Attention jointly selects incoming river edges
+    1. Multi-scale Ancestor-Path Lag Attention jointly selects directed paths
        and causally observable travel lags for each forecast lead.
     2. Transformer-GNN Cross Fusion lets local temporal queries select among
        graph routing-head tokens before a zero-started upstream correction.
@@ -44,6 +44,7 @@ class RiverGraphCrossFormer(nn.Module):
         transformer_layers: int = 2,
         graph_heads: int = 4,
         history_steps: int = 8,
+        max_path_hops: int = 8,
         dropout: float = 0.1,
         lag_prior_scale_days: float = 2.0,
         **_: object,
@@ -56,6 +57,7 @@ class RiverGraphCrossFormer(nn.Module):
         self.graph_variant = graph_variant
         self.graph_seed = graph_seed
         self.output_window = output_window
+        self.max_path_hops = max_path_hops
         self.input_encoder = InputMaskEncoder(
             value_dim, static_dim, time_dim, hidden_dim
         )
@@ -80,6 +82,7 @@ class RiverGraphCrossFormer(nn.Module):
             edge_dim,
             num_heads=graph_heads,
             max_lag=max_lag,
+            max_path_hops=max_path_hops,
             prior_scale_days=lag_prior_scale_days,
         )
         self.cross_fusion = TransformerGraphCrossFusion(hidden_dim, graph_heads)
@@ -91,6 +94,7 @@ class RiverGraphCrossFormer(nn.Module):
         self.fusion_weights: Tensor | None = None
         self.history_routing: Tensor | None = None
         self._upstream_residual_only = False
+        self._expanded_graph_cache: tuple[Tensor, Tensor, Tensor] | None = None
 
     def configure_upstream_residual_training(self, gate_bias: float = -2.0) -> None:
         """Freeze the local Transformer and train only graph innovations."""
@@ -156,14 +160,36 @@ class RiverGraphCrossFormer(nn.Module):
             return local_prediction
 
         assert variant_edges is not None and variant_attr is not None
+        attention_edges, attention_attr, path_hops = self._expanded_graph(
+            variant_edges, variant_attr
+        )
         graph_heads, self.attention_weights = self.graph_attention(
             history_states,
             local_context,
             local_context,
-            variant_edges,
-            variant_attr,
+            attention_edges,
+            attention_attr,
+            path_hops,
         )
         graph_state, self.fusion_weights = self.cross_fusion(
             local_context, graph_heads
         )
         return local_prediction + self.upstream_decoder(graph_state)
+
+    def _expanded_graph(
+        self, edge_index: Tensor, edge_attr: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        """Return cached one-to-K-hop directed path candidates."""
+        if self._expanded_graph_cache is None:
+            self._expanded_graph_cache = expand_directed_paths(
+                edge_index,
+                edge_attr,
+                max_hops=self.max_path_hops,
+            )
+        cached_index, cached_attr, cached_hops = self._expanded_graph_cache
+        if cached_index.device != edge_index.device:
+            cached_index = cached_index.to(edge_index.device)
+            cached_attr = cached_attr.to(edge_attr.device)
+            cached_hops = cached_hops.to(edge_index.device)
+            self._expanded_graph_cache = (cached_index, cached_attr, cached_hops)
+        return cached_index, cached_attr, cached_hops
