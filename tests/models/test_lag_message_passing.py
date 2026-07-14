@@ -6,7 +6,9 @@ from RiverLagNet.models.lag_message_passing import DirectedLagAwareMessagePassin
 def _make_uniform(module: DirectedLagAwareMessagePassing) -> None:
     with torch.no_grad():
         module.message_projection.weight.fill_(1.0)
-        for parameter in module.score_network.parameters():
+        for parameter in module.lag_score_network.parameters():
+            parameter.zero_()
+        for parameter in module.edge_score_network.parameters():
             parameter.zero_()
 
 
@@ -50,6 +52,29 @@ def test_learned_attention_sums_to_one_per_destination_over_edges_and_lags() -> 
         assert torch.allclose(attention[:, incoming].sum(dim=(1, 2)), torch.ones(2), atol=1e-6)
     assert torch.all(upstream[:, 0] == 0)
     assert torch.all(upstream[:, 2] == 0)
+
+
+def test_factorized_attention_normalizes_lags_then_incoming_edges() -> None:
+    module = DirectedLagAwareMessagePassing(
+        3, edge_dim=2, max_lag=2, lag_mode="learned_lag", prior_strength=0.0
+    )
+    h_seq = torch.randn(2, 5, 4, 3)
+    edges = torch.tensor([[0, 2, 3], [1, 1, 1]])
+
+    _, attention = module(h_seq, h_seq[:, -1], edges, torch.randn(3, 2))
+
+    assert module.lag_attention_weights is not None
+    assert module.edge_attention_weights is not None
+    assert torch.allclose(
+        module.lag_attention_weights.sum(dim=-1), torch.ones(2, 3), atol=1e-6
+    )
+    assert torch.allclose(
+        module.edge_attention_weights.sum(dim=-1), torch.ones(2), atol=1e-6
+    )
+    reconstructed = (
+        module.lag_attention_weights * module.edge_attention_weights[..., None]
+    )
+    assert torch.allclose(attention, reconstructed, atol=1e-6)
 
 
 def test_training_dropout_does_not_change_reported_attention_normalization() -> None:

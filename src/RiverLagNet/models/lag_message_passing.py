@@ -10,11 +10,13 @@ LAG_MODES = {"no_lag", "fixed_lag", "learned_lag"}
 
 
 class DirectedLagAwareMessagePassing(nn.Module):
-    """Aggregate upstream states with joint incoming-edge and lag attention.
+    """Aggregate upstream states with factorized edge and lag attention.
 
-    Attention weights are normalized over all `(upstream edge, lag)` candidates
-    for each destination node independently. They are learned routing weights,
-    not estimates of causal contribution.
+    Lag weights are first normalized within each directed edge. The resulting
+    lag-aligned edge states are then normalized across the incoming edges of
+    each destination. Returned joint weights still sum to one over all
+    `(upstream edge, lag)` candidates per destination. They are learned routing
+    weights, not estimates of causal contribution.
     """
 
     def __init__(
@@ -42,12 +44,19 @@ class DirectedLagAwareMessagePassing(nn.Module):
         self.message_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.edge_encoder = nn.Linear(edge_dim, hidden_dim)
         self.lag_embedding = nn.Embedding(max_lag + 1, hidden_dim)
-        self.score_network = nn.Sequential(
+        self.lag_score_network = nn.Sequential(
             nn.Linear(hidden_dim * 4, hidden_dim),
             nn.Tanh(),
             nn.Linear(hidden_dim, 1),
         )
+        self.edge_score_network = nn.Sequential(
+            nn.Linear(hidden_dim * 3, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, 1),
+        )
         self.dropout = nn.Dropout(dropout)
+        self.lag_attention_weights: Tensor | None = None
+        self.edge_attention_weights: Tensor | None = None
 
     def forward(
         self,
@@ -78,7 +87,7 @@ class DirectedLagAwareMessagePassing(nn.Module):
         lag_context = self.lag_embedding(lag_ids)[None, None].expand(
             batch, edge_index.shape[1], -1, -1
         )
-        logits = self.score_network(
+        logits = self.lag_score_network(
             torch.cat((destination_states, source_states, edge_context, lag_context), dim=-1)
         ).squeeze(-1)
         if self.lag_mode == "learned_lag" and self.prior_strength:
@@ -93,14 +102,35 @@ class DirectedLagAwareMessagePassing(nn.Module):
             available.zero_()
             available.scatter_(1, fixed[:, None], True)
         logits = logits.masked_fill(~available[None], -torch.inf)
-        attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
+        masked_logits = logits.masked_fill(~available[None], -torch.inf)
+        lag_attention = torch.softmax(masked_logits.float(), dim=-1)
+        lagged_source = (lag_attention.to(source_states.dtype)[..., None] * source_states).sum(
+            dim=2
+        )
+        edge_logits = self.edge_score_network(
+            torch.cat(
+                (
+                    destination_states[:, :, 0],
+                    lagged_source,
+                    edge_context[:, :, 0],
+                ),
+                dim=-1,
+            )
+        ).squeeze(-1)
+        edge_attention = torch.zeros(
+            edge_logits.shape, device=edge_logits.device, dtype=torch.float32
+        )
         for node in destination.unique(sorted=True):
             incoming = destination == node
-            normalized = torch.softmax(logits[:, incoming].reshape(batch, -1).float(), dim=-1)
-            attention[:, incoming] = normalized.reshape(batch, int(incoming.sum()), lag_count)
-        messages = self.message_projection(source_states)
-        message_weights = self.dropout(attention).to(messages.dtype)
-        edge_messages = (message_weights[..., None] * messages).sum(dim=2).to(h_seq.dtype)
+            edge_attention[:, incoming] = torch.softmax(
+                edge_logits[:, incoming].float(), dim=-1
+            )
+        attention = lag_attention * edge_attention[..., None]
+        self.lag_attention_weights = lag_attention.detach()
+        self.edge_attention_weights = edge_attention.detach()
+        messages = self.message_projection(lagged_source)
+        message_weights = self.dropout(edge_attention).to(messages.dtype)
+        edge_messages = (message_weights[..., None] * messages).to(h_seq.dtype)
         upstream = h_seq.new_zeros(batch, nodes, hidden)
         upstream.index_add_(1, destination, edge_messages)
         return upstream, attention
@@ -166,18 +196,42 @@ class DirectedLagAwareMessagePassing(nn.Module):
         lag_context = self.lag_embedding(lag_ids)[None, None, None].expand(
             batch, output_window, edge_count, -1, -1
         )
-        logits = self.score_network(
+        logits = self.lag_score_network(
             torch.cat((destination_states, source_states, edge_context, lag_context), dim=-1)
         ).squeeze(-1)
         if self.lag_mode == "learned_lag" and self.prior_strength:
             logits = logits + self._travel_time_prior(edge_attr, lag_ids)[None, None]
 
-        attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
+        masked_lag_logits = logits.masked_fill(~available[None], -torch.inf)
+        edge_has_candidate = available.any(dim=-1)
+        safe_lag_logits = torch.where(
+            edge_has_candidate[None, :, :, None],
+            masked_lag_logits,
+            torch.zeros_like(masked_lag_logits),
+        )
+        lag_attention = torch.softmax(safe_lag_logits.float(), dim=-1)
+        lag_attention = lag_attention * available[None].to(lag_attention.dtype)
+        lagged_source = (
+            lag_attention.to(source_states.dtype)[..., None] * source_states
+        ).sum(dim=3)
+        edge_logits = self.edge_score_network(
+            torch.cat(
+                (
+                    destination_states[:, :, :, 0],
+                    lagged_source,
+                    edge_context[:, :, :, 0],
+                ),
+                dim=-1,
+            )
+        ).squeeze(-1)
+        edge_attention = torch.zeros(
+            edge_logits.shape, device=edge_logits.device, dtype=torch.float32
+        )
         for node in destination.unique(sorted=True):
             incoming = destination == node
             incoming_count = int(incoming.sum())
-            candidates = available[:, incoming].reshape(output_window, -1)
-            node_logits = logits[:, :, incoming].reshape(batch, output_window, -1)
+            candidates = edge_has_candidate[:, incoming]
+            node_logits = edge_logits[:, :, incoming]
             masked = node_logits.masked_fill(~candidates[None], -torch.inf)
             has_candidate = candidates.any(dim=-1)
             safe_logits = torch.where(
@@ -185,13 +239,16 @@ class DirectedLagAwareMessagePassing(nn.Module):
             )
             normalized = torch.softmax(safe_logits.float(), dim=-1)
             normalized = normalized * candidates[None].to(normalized.dtype)
-            attention[:, :, incoming] = normalized.reshape(
-                batch, output_window, incoming_count, lag_count
+            edge_attention[:, :, incoming] = normalized.reshape(
+                batch, output_window, incoming_count
             )
 
-        messages = self.message_projection(source_states)
-        message_weights = self.dropout(attention).to(messages.dtype)
-        edge_messages = (message_weights[..., None] * messages).sum(dim=3).to(h_seq.dtype)
+        attention = lag_attention * edge_attention[..., None]
+        self.lag_attention_weights = lag_attention.detach()
+        self.edge_attention_weights = edge_attention.detach()
+        messages = self.message_projection(lagged_source)
+        message_weights = self.dropout(edge_attention).to(messages.dtype)
+        edge_messages = (message_weights[..., None] * messages).to(h_seq.dtype)
         upstream = h_seq.new_zeros(batch, output_window, nodes, hidden)
         upstream.index_add_(2, destination, edge_messages)
         return upstream, attention
