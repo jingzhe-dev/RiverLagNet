@@ -36,11 +36,14 @@ def sparsemax(values: Tensor, dim: int = -1) -> Tensor:
 class EdgeLagHorizonSparseAttention(nn.Module):
     """Attend only to causally observable upstream edge-lag candidates.
 
-    A destination query at lead ``h`` can use an upstream history state at lag
-    ``tau`` only when ``tau >= h``. Scores combine Transformer query-key
-    similarity, edge attributes, a learned lag embedding, and a soft prior
-    centered on the edge travel time. Sparsemax normalizes all incoming
-    edge-lag candidates jointly for every destination, horizon, and head.
+    For relative source lead ``h - tau <= 0``, the candidate comes from the
+    observed upstream history. For ``h - tau > 0``, it comes from the model's
+    own upstream future context, never a future target. This observed-forecast
+    bridge keeps short physical travel lags available at long forecast leads.
+    Scores combine Transformer query-key similarity, edge attributes, a
+    learned lag embedding, and a soft travel-time prior. Sparsemax normalizes
+    all incoming edge-lag candidates jointly for every destination, horizon,
+    and head.
     """
 
     def __init__(
@@ -78,6 +81,7 @@ class EdgeLagHorizonSparseAttention(nn.Module):
         self,
         history_states: Tensor,
         destination_queries: Tensor,
+        source_future_states: Tensor,
         edge_index: Tensor,
         edge_attr: Tensor,
     ) -> tuple[Tensor, Tensor]:
@@ -86,7 +90,13 @@ class EdgeLagHorizonSparseAttention(nn.Module):
         Shapes are ``contexts [B,H,N,R,d]`` and
         ``weights [B,H,E,max_lag+1,R]``.
         """
-        self._validate(history_states, destination_queries, edge_index, edge_attr)
+        self._validate(
+            history_states,
+            destination_queries,
+            source_future_states,
+            edge_index,
+            edge_attr,
+        )
         batch, history, nodes, _ = history_states.shape
         horizons = destination_queries.shape[1]
         edges = edge_index.shape[1]
@@ -106,22 +116,10 @@ class EdgeLagHorizonSparseAttention(nn.Module):
         queries = self.query_projection(destination_queries).view(
             batch, horizons, nodes, self.num_heads, self.head_dim
         )
-        keys = self.key_projection(history_states).view(
-            batch, history, nodes, self.num_heads, self.head_dim
+        candidate_keys, candidate_values, _, feasible = self._candidate_states(
+            history_states, source_future_states, edge_index
         )
-        values = self.value_projection(history_states).view(
-            batch, history, nodes, self.num_heads, self.head_dim
-        )
-
-        lead = torch.arange(1, horizons + 1, device=history_states.device)
         lag = torch.arange(lags, device=history_states.device)
-        source_time = history - 1 + lead[:, None] - lag[None, :]
-        feasible = (lag[None, :] >= lead[:, None]) & (source_time >= 0)
-        source_time = source_time.clamp(0, history - 1)
-        time_index = source_time[:, None, :]
-        source_index = source[None, :, None]
-        candidate_keys = keys[:, time_index, source_index]
-        candidate_values = values[:, time_index, source_index]
 
         edge_key = self.edge_key(edge_attr).view(
             edges, self.num_heads, self.head_dim
@@ -183,10 +181,60 @@ class EdgeLagHorizonSparseAttention(nn.Module):
                 ).sum(dim=(2, 3))
         return contexts, weights
 
+    def _candidate_states(
+        self,
+        history_states: Tensor,
+        source_future_states: Tensor,
+        edge_index: Tensor,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """Build observed/predicted upstream candidates for every lead and lag."""
+        batch, history, nodes, _ = history_states.shape
+        horizons = source_future_states.shape[1]
+        source = edge_index[0]
+        history_keys = self.key_projection(history_states).view(
+            batch, history, nodes, self.num_heads, self.head_dim
+        )
+        history_values = self.value_projection(history_states).view(
+            batch, history, nodes, self.num_heads, self.head_dim
+        )
+        future_keys = self.key_projection(source_future_states).view(
+            batch, horizons, nodes, self.num_heads, self.head_dim
+        )
+        future_values = self.value_projection(source_future_states).view(
+            batch, horizons, nodes, self.num_heads, self.head_dim
+        )
+        lead = torch.arange(1, horizons + 1, device=history_states.device)
+        lag = torch.arange(self.max_lag + 1, device=history_states.device)
+        relative_lead = lead[:, None] - lag[None, :]
+        history_time = history - 1 + relative_lead
+        feasible = history_time >= 0
+        history_time = history_time.clamp(0, history - 1)
+        future_time = (relative_lead - 1).clamp(0, horizons - 1)
+        history_index = history_time[:, None, :]
+        future_index = future_time[:, None, :]
+        source_index = source[None, :, None]
+        candidate_history_keys = history_keys[:, history_index, source_index]
+        candidate_history_values = history_values[:, history_index, source_index]
+        candidate_future_keys = future_keys[:, future_index, source_index]
+        candidate_future_values = future_values[:, future_index, source_index]
+        use_future = relative_lead > 0
+        candidate_keys = torch.where(
+            use_future[None, :, None, :, None, None],
+            candidate_future_keys,
+            candidate_history_keys,
+        )
+        candidate_values = torch.where(
+            use_future[None, :, None, :, None, None],
+            candidate_future_values,
+            candidate_history_values,
+        )
+        return candidate_keys, candidate_values, use_future, feasible
+
     def _validate(
         self,
         history_states: Tensor,
         destination_queries: Tensor,
+        source_future_states: Tensor,
         edge_index: Tensor,
         edge_attr: Tensor,
     ) -> None:
@@ -198,6 +246,8 @@ class EdgeLagHorizonSparseAttention(nn.Module):
             or destination_queries.shape[2:] != history_states.shape[2:]
         ):
             raise ValueError("destination_queries must have shape [B,H,N,hidden_dim]")
+        if source_future_states.shape != destination_queries.shape:
+            raise ValueError("source_future_states must match destination_queries")
         if edge_index.ndim != 2 or edge_index.shape[0] != 2:
             raise ValueError("edge_index must have shape [2,E]")
         if edge_attr.ndim != 2 or edge_attr.shape[0] != edge_index.shape[1]:

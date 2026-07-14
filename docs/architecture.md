@@ -123,31 +123,46 @@ mask-aware 27-variable history
 
 **Problem.** Ordinary GAT attention selects neighbors at one timestamp and
 ordinary Transformer attention ignores river direction. Both can assign
-weight to a downstream node, an impossible future source state, or a lag that
-is inconsistent with the forecast lead. A dense softmax also spreads positive
-mass over every candidate, making the learned routing hard to isolate.
+weight to a downstream node or a lag that is inconsistent with the forecast
+lead. Simply masking every source time after the forecast origin avoids
+leakage but creates another error: for a 20-day forecast on a 2-day edge, it
+removes the physically relevant 2-day route and forces attention onto lags of
+20 days or longer. A dense softmax also spreads positive mass over every
+candidate, making the learned routing hard to isolate.
 
-**Method.** For destination `i`, lead `h`, upstream edge `j→i`, lag `τ`, and
-routing head `r`, ELHSA scores only candidates satisfying `τ ≥ h`:
+**Method.** The **Observed–Forecast Bridge** defines the source candidate as
+
+```text
+c_j,h,τ = e_j,t+h-τ                 if h-τ <= 0
+          context_local(j,h-τ)      if h-τ > 0
+```
+
+The first branch is an observed-history Transformer state. The second is the
+model's own upstream forecast context and never a future target. Thus a short
+travel lag remains available at every forecast lead without leakage. For
+destination `i`, upstream edge `j→i`, lag `τ`, and routing head `r`, ELHSA
+scores:
 
 ```text
 s_ijhτr = <Q_r q_i,h,
-            K_r e_j,t+h-τ + E_r(edge_ji) + L_τr> / sqrt(d_r)
+            K_r c_j,h,τ + E_r(edge_ji) + L_τr> / sqrt(d_r)
            + b_r(edge_ji)
            - (τ - travel_time_ji)^2 / (2 sigma_r^2)
 
-alpha_i,h,r = sparsemax_{j in Up(i), τ≥h}(s_ijhτr)
+alpha_i,h,r = sparsemax_{j in Up(i), 0≤τ≤max_lag}(s_ijhτr)
 ```
 
 The joint normalization domain is the Cartesian set of all incoming edges and
-all causally observable lags for one destination, horizon, and head. Sparsemax
-can set unneeded edge-lag routes to exact zero. `travel_time_prior_days` is a
+all leakage-free observed/forecast-bridge lags for one destination, horizon,
+and head. Sparsemax can set unneeded edge-lag routes to exact zero.
+`travel_time_prior_days` is a
 soft Gaussian anchor with a learned head-specific scale, not a hard label; the
 query-key term can move attention away from it when training evidence supports
 another lag. Nodes without incoming edges receive exact zero graph context.
 
-ELHSA therefore solves direction leakage, future leakage, horizon/lag
-misalignment, and dense attention dilution in one normalized operator. Its
+ELHSA therefore solves direction leakage, future-target leakage, short-lag
+loss at long horizons, horizon/lag misalignment, and dense attention dilution
+in one normalized operator. Its
 weights remain predictive routing preferences, not causal effect estimates.
 
 ### Innovation 2: Transformer–GNN Head Cross Fusion (TGCF)

@@ -157,7 +157,11 @@ class RiverGraphCrossFormer(nn.Module):
 
         assert variant_edges is not None and variant_attr is not None
         graph_heads, self.attention_weights = self.graph_attention(
-            history_states, local_context, variant_edges, variant_attr
+            history_states,
+            local_context,
+            local_context,
+            variant_edges,
+            variant_attr,
         )
         graph_state, self.fusion_weights = self.cross_fusion(
             local_context, graph_heads
