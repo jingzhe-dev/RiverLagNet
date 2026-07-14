@@ -27,6 +27,7 @@ class DirectedLagAwareMessagePassing(nn.Module):
         prior_scale_days: float = 1.0,
         prior_strength: float = 8.0,
         lag_residual_max_mix: float = 1.0,
+        lag_bias_mode: str = "none",
     ) -> None:
         super().__init__()
         if lag_mode not in LAG_MODES:
@@ -37,12 +38,15 @@ class DirectedLagAwareMessagePassing(nn.Module):
             raise ValueError("prior_strength cannot be negative")
         if not 0.0 <= lag_residual_max_mix <= 1.0:
             raise ValueError("lag_residual_max_mix must be between zero and one")
+        if lag_bias_mode not in {"none", "global"}:
+            raise ValueError("lag_bias_mode must be none or global")
         self.hidden_dim = hidden_dim
         self.max_lag = max_lag
         self.lag_mode = lag_mode
         self.prior_scale_days = prior_scale_days
         self.prior_strength = prior_strength
         self.lag_residual_max_mix = lag_residual_max_mix
+        self.lag_bias_mode = lag_bias_mode
         self.message_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.edge_encoder = nn.Linear(edge_dim, hidden_dim)
         self.lag_embedding = nn.Embedding(max_lag + 1, hidden_dim)
@@ -52,7 +56,18 @@ class DirectedLagAwareMessagePassing(nn.Module):
             nn.Linear(hidden_dim, 1),
         )
         self.lag_residual_scale = nn.Parameter(torch.zeros(()))
+        self.lag_offset_bias = (
+            nn.Parameter(torch.zeros(max_lag)) if lag_bias_mode == "global" else None
+        )
         self.dropout = nn.Dropout(dropout)
+
+    def lag_biases(self) -> Tensor:
+        """Return lag-0 anchored global bias scores `[max_lag+1]`."""
+        if self.lag_offset_bias is None:
+            return self.lag_embedding.weight.new_zeros(self.max_lag + 1)
+        return torch.cat(
+            (self.lag_offset_bias.new_zeros(1), self.lag_offset_bias), dim=0
+        )
 
     def forward(
         self,
@@ -89,6 +104,8 @@ class DirectedLagAwareMessagePassing(nn.Module):
         logits = neural_logits
         if self.lag_mode == "learned_lag" and self.prior_strength:
             logits = logits + self._travel_time_prior(edge_attr, lag_ids)[None]
+        if self.lag_mode == "learned_lag" and self.lag_offset_bias is not None:
+            logits = logits + self.lag_biases()[None, None]
         available = lag_ids[None, :] < history
         available = available.expand(edge_index.shape[1], -1).clone()
         if self.lag_mode == "no_lag":
@@ -211,6 +228,8 @@ class DirectedLagAwareMessagePassing(nn.Module):
         logits = neural_logits
         if self.lag_mode == "learned_lag" and self.prior_strength:
             logits = logits + self._travel_time_prior(edge_attr, lag_ids)[None, None]
+        if self.lag_mode == "learned_lag" and self.lag_offset_bias is not None:
+            logits = logits + self.lag_biases()[None, None, None]
 
         if self.lag_mode == "learned_lag":
             lag_logits = logits.masked_fill(~available[None], -torch.inf)

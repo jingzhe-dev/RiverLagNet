@@ -34,6 +34,7 @@ class RiverLagNet(nn.Module):
         lag_prior_scale_days: float = 1.0,
         lag_prior_strength: float = 8.0,
         lag_residual_max_mix: float = 1.0,
+        lag_bias_mode: str = "none",
         horizon_gate_mode: str = "none",
         **_: object,
     ) -> None:
@@ -47,6 +48,7 @@ class RiverLagNet(nn.Module):
         self.output_window = output_window
         self.horizon_gate_mode = horizon_gate_mode
         self._horizon_calibration_only = False
+        self._lag_refinement_only = False
         self.input_encoder = InputMaskEncoder(value_dim, static_dim, time_dim, hidden_dim)
         self.temporal_encoder = NodeTemporalGRU(hidden_dim, hidden_dim)
         self.message_passing = DirectedLagAwareMessagePassing(
@@ -58,6 +60,7 @@ class RiverLagNet(nn.Module):
             lag_prior_scale_days,
             lag_prior_strength,
             lag_residual_max_mix,
+            lag_bias_mode,
         )
         self.fusion = LocalUpstreamGatedFusion(hidden_dim)
         self.decoder = MultiHorizonMultiTargetDecoder(hidden_dim, output_window, target_dim)
@@ -97,10 +100,22 @@ class RiverLagNet(nn.Module):
             parameter.requires_grad_(True)
         self._horizon_calibration_only = True
 
+    def configure_lag_refinement_training(self) -> None:
+        """Freeze edge routing and train only zero-started lag refinements."""
+        if self.message_passing.lag_mode != "learned_lag":
+            raise ValueError("lag refinement requires lag_mode=learned_lag")
+        if self.message_passing.lag_offset_bias is None:
+            raise ValueError("lag refinement requires lag_bias_mode=global")
+        for parameter in self.parameters():
+            parameter.requires_grad_(False)
+        self.message_passing.lag_residual_scale.requires_grad_(True)
+        self.message_passing.lag_offset_bias.requires_grad_(True)
+        self._lag_refinement_only = True
+
     def train(self, mode: bool = True) -> RiverLagNet:
         """Keep the frozen graph forecaster deterministic during calibration."""
         super().train(mode)
-        if mode and self._horizon_calibration_only:
+        if mode and (self._horizon_calibration_only or self._lag_refinement_only):
             for module in (
                 self.input_encoder,
                 self.temporal_encoder,
@@ -110,8 +125,11 @@ class RiverLagNet(nn.Module):
                 self.upstream_decoder,
             ):
                 module.eval()
-            assert self.horizon_gate is not None
-            self.horizon_gate.train(True)
+            if self.horizon_gate is not None:
+                self.horizon_gate.eval()
+            if self._horizon_calibration_only:
+                assert self.horizon_gate is not None
+                self.horizon_gate.train(True)
         return self
 
     def forward(

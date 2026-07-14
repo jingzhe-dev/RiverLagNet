@@ -53,6 +53,7 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
         "model.horizon_gate.offset",
         "model.horizon_gate.slope",
         "model.horizon_gate.normalized_lead",
+        "model.message_passing.lag_offset_bias",
     }
     unexpected_missing = set(incompatible.missing_keys) - allowed_missing
     if unexpected_missing or incompatible.unexpected_keys:
@@ -137,6 +138,18 @@ def run(cfg: DictConfig) -> dict[str, Any]:
                 "horizon_calibration_only and upstream_residual_only are mutually exclusive"
             )
         model.configure_horizon_calibration_training()
+    if bool(cfg.trainer.lag_refinement_only):
+        if not isinstance(model, RiverLagNet):
+            raise ValueError("lag_refinement_only requires model=riverlagnet")
+        if not cfg.trainer.warm_start_checkpoint:
+            raise ValueError("lag_refinement_only requires warm_start_checkpoint")
+        if bool(cfg.trainer.upstream_residual_only) or bool(
+            cfg.trainer.horizon_calibration_only
+        ):
+            raise ValueError(
+                "lag_refinement_only is mutually exclusive with other refinement modes"
+            )
+        model.configure_lag_refinement_training()
     run_dir = Path(str(cfg.run_dir))
     runtime = RuntimeStatsCallback()
     callbacks = [runtime, LearningRateMonitor(logging_interval="epoch")]

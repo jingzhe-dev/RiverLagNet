@@ -171,3 +171,29 @@ def test_horizon_calibration_trains_only_two_gate_parameters() -> None:
     assert trainable == ["horizon_gate.offset", "horizon_gate.slope"]
     assert not model.message_passing.training
     assert model.horizon_gate is not None and model.horizon_gate.training
+
+
+def test_lag_refinement_trains_only_lag_scale_and_global_bias() -> None:
+    model = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=3,
+        lag_mode="learned_lag",
+        lag_bias_mode="global",
+        horizon_gate_mode="linear",
+    )
+
+    model.configure_lag_refinement_training()
+    model.train()
+    trainable = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+
+    assert trainable == [
+        "message_passing.lag_residual_scale",
+        "message_passing.lag_offset_bias",
+    ]
+    assert not model.message_passing.training
+    assert model.horizon_gate is not None and not model.horizon_gate.training

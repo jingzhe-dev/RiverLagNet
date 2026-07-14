@@ -98,8 +98,10 @@ def test_zero_lag_residual_exactly_nests_no_lag_edge_routing() -> None:
         lag_mode="learned_lag",
         dropout=0.0,
         lag_residual_max_mix=0.1,
+        lag_bias_mode="global",
     ).eval()
-    learned.load_state_dict(no_lag.state_dict())
+    incompatible = learned.load_state_dict(no_lag.state_dict(), strict=False)
+    assert incompatible.missing_keys == ["lag_offset_bias"]
     h_seq = torch.randn(2, 6, 4, 3)
     edges = torch.tensor([[0, 2, 3], [1, 1, 1]])
     edge_attr = torch.tensor([[0.2, 1.0], [-0.3, 2.0], [0.5, 3.0]])
@@ -115,6 +117,30 @@ def test_zero_lag_residual_exactly_nests_no_lag_edge_routing() -> None:
     assert torch.allclose(
         learned_attention.sum(dim=-1), base_attention.sum(dim=-1), atol=1e-6
     )
+
+
+def test_global_lag_bias_is_anchored_at_zero_and_changes_lag_attention() -> None:
+    module = DirectedLagAwareMessagePassing(
+        3,
+        edge_dim=2,
+        max_lag=3,
+        lag_mode="learned_lag",
+        dropout=0.0,
+        prior_strength=0.0,
+        lag_bias_mode="global",
+    ).eval()
+    h_seq = torch.randn(1, 6, 2, 3)
+    edge_index = torch.tensor([[0], [1]])
+    edge_attr = torch.tensor([[0.2, 1.0]])
+    _, before = module(h_seq, h_seq[:, -1], edge_index, edge_attr)
+    assert torch.equal(module.lag_biases()[0:1], torch.zeros(1))
+
+    with torch.no_grad():
+        assert module.lag_offset_bias is not None
+        module.lag_offset_bias[1] = 4.0
+    _, after = module(h_seq, h_seq[:, -1], edge_index, edge_attr)
+
+    assert after[0, 0, 2] > before[0, 0, 2]
 
 
 def test_training_dropout_does_not_change_reported_attention_normalization() -> None:

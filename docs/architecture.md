@@ -150,6 +150,15 @@ freezes the entire graph forecaster, keeps its dropout modules in evaluation
 mode, and updates only `offset` and `slope`. This is an explicitly registered
 validation experiment, not a post-hoc modification of stored predictions.
 
+The controlled lag-refinement stage then warm-starts the selected
+horizon-calibrated `no_lag` checkpoint as `learned_lag`. It freezes the local
+forecaster, incoming-edge routing, upstream residual decoder, and horizon
+gate. Only the zero-started scalar lag mixture and 14 lag-0-anchored global
+relative-lag biases are trainable. The mixture remains capped at 10 percent,
+so the stage starts exactly at `no_lag` and any validation difference is
+attributable to historical upstream-state mixing rather than changed edge
+weights or model capacity elsewhere.
+
 The `shuffled_graph` ablation samples a deterministic directed null graph with
 the same node set and edge count, while excluding self-loops and every true
 edge. Edge attributes retain their empirical distribution but are detached
