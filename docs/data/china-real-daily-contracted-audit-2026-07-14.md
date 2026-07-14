@@ -35,10 +35,10 @@ All four models used seed 42, the same chronological 70/15/15 split, 90-day inpu
 
 | Model | Validation macro NSE | Macro MAE | Macro RMSE | Duration (s) | Peak VRAM (GiB) |
 |---|---:|---:|---:|---:|---:|
-| Persistence | 0.2257 | 0.2240 | 0.6929 | 37.0 | 0.48 |
-| Station GRU | 0.5129 | 0.2119 | 0.5867 | 79.5 | 1.69 |
-| Static Directed GAT | **0.5161** | 0.2069 | 0.5858 | 306.9 | 1.69 |
-| RiverLagNet | 0.5135 | **0.2043** | **0.5851** | 768.8 | 4.05 |
+| Persistence | 0.2257 | 0.2240 | 0.6929 | 27.8 | 0.48 |
+| Station GRU | 0.5129 | 0.2119 | 0.5867 | 61.4 | 1.69 |
+| Static Directed GAT | **0.5161** | 0.2069 | 0.5858 | 267.7 | 1.69 |
+| RiverLagNet | 0.5135 | **0.2043** | **0.5851** | 681.8 | 4.05 |
 
 ![Contracted seed-42 validation metrics](../figures/china_real_daily_contracted_seed42_metrics.png)
 
