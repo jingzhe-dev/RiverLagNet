@@ -45,6 +45,7 @@ def prepare_china_contracted_real_daily(
     travel_speed_km_per_day: float = 30.0,
     max_lag_days: int = 14,
     hash_sources: bool = True,
+    dataset_id: str = CONTRACTED_DATASET_VERSION,
 ) -> ContractedRealDailyPreparationSummary:
     """Build the audited contracted graph and its leakage-safe daily tensor."""
     hydrorivers_zip = Path(hydrorivers_zip).expanduser().resolve()
@@ -78,7 +79,7 @@ def prepare_china_contracted_real_daily(
         output_dir,
         travel_speed_km_per_day=travel_speed_km_per_day,
         hash_sources=hash_sources,
-        dataset_id=CONTRACTED_DATASET_VERSION,
+        dataset_id=dataset_id,
         graph_construction=assets.report,
     )
 

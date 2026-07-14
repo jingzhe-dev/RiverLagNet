@@ -1,0 +1,5 @@
+name: china_real_daily_contracted_1068_${model.name}_seed${seed}
+description: Real daily China observations on the largest 1068-node coverage-passing contracted river tree; imputed values excluded.
+status: baseline
+record_result: true
+results_path: experiments/results.tsv

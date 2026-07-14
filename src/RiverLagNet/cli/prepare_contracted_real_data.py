@@ -33,6 +33,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--travel-speed-km-per-day", type=float, default=30.0)
     parser.add_argument("--max-lag-days", type=int, default=14)
     parser.add_argument(
+        "--dataset-id",
+        default="china-real-daily-contracted-v0.2",
+        help="Versioned identifier written to the prepared-data manifest",
+    )
+    parser.add_argument(
         "--skip-source-hashes",
         action="store_true",
         help="Skip source SHA256 only for quick local diagnostics",
@@ -56,6 +61,7 @@ def main() -> None:
         travel_speed_km_per_day=args.travel_speed_km_per_day,
         max_lag_days=args.max_lag_days,
         hash_sources=not args.skip_source_hashes,
+        dataset_id=args.dataset_id,
     )
     print(json.dumps(contracted_summary_as_dict(summary), indent=2, ensure_ascii=False))
 

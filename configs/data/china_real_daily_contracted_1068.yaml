@@ -1,0 +1,8 @@
+scenario: real_daily
+dataset_path: data/processed/china-real-daily-contracted-1068-v0.3/dataset.npz
+input_window: 90
+output_window: 30
+batch_size: 4
+num_workers: 0
+pin_memory: true
+seed: ${seed}
