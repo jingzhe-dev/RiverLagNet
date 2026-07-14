@@ -16,6 +16,7 @@ def _payload() -> dict[str, object]:
             {
                 "seed": seed,
                 "no_graph": {"macro_nse": local},
+                "static_gat": {"macro_nse": graph - 0.003},
                 "uncalibrated_directed_graph": {"macro_nse": graph - 0.001},
                 "directed_graph": {"macro_nse": graph},
                 "learned_lag": {"macro_nse": graph + 0.00001},
@@ -30,6 +31,12 @@ def _payload() -> dict[str, object]:
         },
         "paired_lag_refinement_delta": {
             "macro_nse": _summary([0.00001, 0.00001])
+        },
+        "paired_selected_model_delta": {
+            "macro_nse": _summary([0.01001, 0.00501])
+        },
+        "paired_static_gat_delta": {
+            "macro_nse": _summary([0.00301, 0.00301])
         },
         "downstream_target_delta_nse": {
             name: _summary(values)

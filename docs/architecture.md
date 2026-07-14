@@ -125,17 +125,18 @@ Attention weights indicate learned routing preference only. They are not causal 
 The contracted real-data architecture screen currently selects the strictly
 nested directed upstream residual with a linear horizon gate and bounded
 learned-lag refinement. Across seeds 42--46 it improves validation macro NSE
-over its paired frozen `no_graph` checkpoint by `0.001334 ± 0.000412`, with
-five of five positive differences. The gain is `0.002302 ± 0.000711` on the
-112 nodes with incoming upstream edges, while the 126 headwater predictions
-remain exactly unchanged. The largest horizon-band gain is at days 15--30
-(`+0.003773`). These are validation increments, not causal effects; the
-held-out test split remains unopened.
+over its paired frozen `no_graph` checkpoint by `0.001337 ± 0.000412` and over
+an independently retrained Static Directed GAT by `0.002749 ± 0.002109`; both
+comparisons are positive for all five seeds. The graph-and-horizon gain is
+`0.002302 ± 0.000711` on the 112 nodes with incoming upstream edges, while the
+126 headwater predictions remain exactly unchanged. The largest horizon-band
+gain is at days 15--30 (`+0.003773`). These are validation increments, not
+causal effects; the held-out test split remains unopened.
 
 The horizon gate independently adds `0.000232 ± 0.000248` macro NSE with five
 of five positive seed differences. The bounded learned-lag stage is technically
 validation-best, but its independent increment is only
-`0.00000327 ± 0.00000235`; global peak-bias lags are inconsistent across seeds.
+`0.00000322 ± 0.00000235`; global peak-bias lags are inconsistent across seeds.
 The empirical claim is therefore a stable directed-graph benefit, not recovered
 physical travel time. Exact evidence and limitations are in
 `docs/core_result.md`.

@@ -75,3 +75,4 @@
 - 2026-07-14｜NSE 辅助损失的首个组合补丁因导入上下文不匹配被整体拒绝｜假定 Lightning 模块使用绝对导入，未先读取文件顶部的实际相对导入｜读取精确上下文后拆分为损失、模块、CLI 和配置四个小补丁并成功应用｜跨多个文件的补丁先逐一核对关键导入与配置锚点
 - 2026-07-14｜读取训练测试时附带猜测了不存在的 `tests/cli/test_train.py`，导致命令以非零状态结束｜没有先枚举测试目录就拼接了第二个候选路径｜保留已成功读取的 checkpoint 测试并停止使用猜测路径｜访问测试文件前先用 `rg --files tests` 确认实际路径
 - 2026-07-14｜两阶段 smoke 首次因 checkpoint 文件名中的 `=` 无法通过 Hydra 覆盖语法｜把带 `epoch=...-val_nse=...` 的路径直接作为未转义配置值｜对路径内两个等号使用 Hydra 反斜杠转义后真实 checkpoint 加载和单 batch 训练成功｜CLI 传递 Lightning checkpoint 路径时预先转义 Hydra 保留字符
+- 2026-07-14｜核查静态 GAT 构造逻辑时读取了不存在的 `models/factory.py`｜未先确认 `build_model` 的实际定义位置便假定了常见工厂文件名｜改为从检索结果读取 `training/lightning_module.py` 并完成 checkpoint 结构核查｜先用 `rg -n "def build_model"` 定位定义，再读取返回的真实路径
