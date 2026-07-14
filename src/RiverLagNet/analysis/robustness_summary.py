@@ -199,6 +199,44 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
                 f"![Experiment result summary]({markdown_png})",
                 "",
             ]
+    graph_visualization = summary.get("graph_visualization")
+    graph_visualization_lines: list[str] = []
+    if isinstance(graph_visualization, Mapping):
+        graph_png = graph_visualization.get("markdown_png")
+        graph_summary_path = graph_visualization.get("markdown_summary")
+        prior_counts = graph_visualization.get("rounded_prior_lag_counts")
+        if (
+            isinstance(graph_png, str)
+            and graph_png
+            and isinstance(graph_summary_path, str)
+            and graph_summary_path
+            and isinstance(prior_counts, Mapping)
+        ):
+            lag_counts = ", ".join(
+                f"{count} edges at {lag} d" for lag, count in prior_counts.items()
+            )
+            graph_visualization_lines = [
+                "## Monitored upstream-downstream graph",
+                "",
+                f"![Monitored upstream-to-downstream river graph]({graph_png})",
+                "",
+                (
+                    f"The audited graph contains {graph_visualization['node_count']} monitored "
+                    f"segments, {graph_visualization['edge_count']} upstream-to-downstream edges, "
+                    f"and {graph_visualization['component_count']} disjoint components. Rounded "
+                    f"travel-time priors comprise {lag_counts}."
+                ),
+                "",
+                (
+                    "This concentration near zero makes `fixed_lag` structurally close to "
+                    "`no_lag` and is a plausible explanation for the small validation deltas; "
+                    "it is a mechanism diagnostic, not a causal claim. Node coordinates are "
+                    "mapped-monitor centroids rather than river-line geometry."
+                ),
+                "",
+                f"Machine-readable graph audit: [{graph_summary_path}]({graph_summary_path})",
+                "",
+            ]
     lines = [
         f"# {summary['report_title']}",
         "",
@@ -207,6 +245,7 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
         evidence_note,
         "",
         *visualization_lines,
+        *graph_visualization_lines,
         "## Scope and evidence",
         "",
         f"- Seeds: {', '.join(str(seed) for seed in seeds)}",

@@ -114,6 +114,22 @@ def test_summary_outputs_json_and_decision_ready_markdown(tmp_path: Path) -> Non
     assert "## Result visualization" in visual_markdown
     assert "![Experiment result summary](figures/summary.png)" in visual_markdown
 
+    summary["graph_visualization"] = {
+        "summary": "experiments/graph.json",
+        "png": "docs/figures/graph.png",
+        "pdf": "docs/figures/graph.pdf",
+        "markdown_png": "figures/graph.png",
+        "markdown_summary": "../experiments/graph.json",
+        "node_count": 36,
+        "edge_count": 26,
+        "component_count": 10,
+        "rounded_prior_lag_counts": {"0": 23, "1": 3},
+    }
+    graph_markdown = render_validation_markdown(summary)
+    assert "## Monitored upstream-downstream graph" in graph_markdown
+    assert "23 edges at 0 d, 3 edges at 1 d" in graph_markdown
+    assert "mechanism diagnostic, not a causal claim" in graph_markdown
+
 
 def test_load_successful_suite_rows_rejects_missing_or_duplicate_success(
     tmp_path: Path,

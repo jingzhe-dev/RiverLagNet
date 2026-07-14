@@ -239,6 +239,8 @@ def test_real_lag_preset_limits_matrix_and_uses_formal_real_data_config() -> Non
     evaluation = evaluation_command(learned, checkpoint, "python")
     assert "data=china_real_daily" in evaluation
     assert "trainer=formal_gpu" in evaluation
+    assert REAL_LAG_V1.graph_data_root == Path("data/processed/china-real-daily-v0.1")
+    assert REAL_LAG_V1.graph_figure_png is not None
 
 
 @pytest.mark.parametrize(

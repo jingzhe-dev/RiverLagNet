@@ -1,0 +1,833 @@
+{
+  "direction": "upstream_to_downstream",
+  "node_definition": "monitored HydroRIVERS segment",
+  "coordinate_semantics": "mean longitude/latitude of source monitoring stations mapped to each segment; not river-line geometry",
+  "node_count": 36,
+  "edge_count": 26,
+  "component_count": 10,
+  "mapping_review_node_count": 1,
+  "rounded_prior_lag_counts": {
+    "0": 23,
+    "1": 3
+  },
+  "nodes": [
+    {
+      "node_id": "40382689",
+      "node_index": 0,
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "longitude": 115.991458,
+      "latitude": 38.962979,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40382928",
+      "node_index": 1,
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "longitude": 115.9999,
+      "latitude": 38.942,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 1,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40384148",
+      "node_index": 2,
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "longitude": 115.9458,
+      "latitude": 38.9037,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40384149",
+      "node_index": 3,
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "longitude": 116.0302,
+      "latitude": 38.9004,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 1,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40384274",
+      "node_index": 4,
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "longitude": 116.01513349999999,
+      "latitude": 38.888365,
+      "source_station_count": 2,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 2,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40376347",
+      "node_index": 5,
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "longitude": 117.17465933333334,
+      "latitude": 39.172299,
+      "source_station_count": 3,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40376480",
+      "node_index": 6,
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "longitude": 117.14329620000001,
+      "latitude": 39.1500616,
+      "source_station_count": 5,
+      "mapping_review": true,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40377224",
+      "node_index": 7,
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "longitude": 117.187135,
+      "latitude": 39.1439535,
+      "source_station_count": 2,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 2,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40378426",
+      "node_index": 8,
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "longitude": 117.22360599999999,
+      "latitude": 39.1183425,
+      "source_station_count": 2,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 1,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40484159",
+      "node_index": 9,
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "longitude": 114.0641,
+      "latitude": 35.8444,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40494035",
+      "node_index": 10,
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "longitude": 114.273927,
+      "latitude": 35.527221,
+      "source_station_count": 2,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 1,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40494036",
+      "node_index": 11,
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "longitude": 114.2967,
+      "latitude": 35.4972,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 2,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40494513",
+      "node_index": 12,
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "longitude": 114.279474,
+      "latitude": 35.499138,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40320483",
+      "node_index": 13,
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "longitude": 122.5977,
+      "latitude": 41.0397,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40320974",
+      "node_index": 14,
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "longitude": 122.4966,
+      "latitude": 41.002,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 2,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40320975",
+      "node_index": 15,
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "longitude": 122.507547,
+      "latitude": 41.003403,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 1,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40322334",
+      "node_index": 16,
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "longitude": 122.5433,
+      "latitude": 40.9561,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40390596",
+      "node_index": 17,
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "longitude": 117.083436,
+      "latitude": 38.680679,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 2,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40390597",
+      "node_index": 18,
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "longitude": 117.107112,
+      "latitude": 38.689473,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 1,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40391228",
+      "node_index": 19,
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "longitude": 117.04438,
+      "latitude": 38.676864,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40391508",
+      "node_index": 20,
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "longitude": 117.047,
+      "latitude": 38.6862,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40971316",
+      "node_index": 21,
+      "component_id": "china-component-06",
+      "component_label": "C06",
+      "longitude": 102.664956,
+      "latitude": 25.041109,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40971317",
+      "node_index": 22,
+      "component_id": "china-component-06",
+      "component_label": "C06",
+      "longitude": 102.70176928571428,
+      "latitude": 25.032126714285713,
+      "source_station_count": 7,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40971577",
+      "node_index": 23,
+      "component_id": "china-component-06",
+      "component_label": "C06",
+      "longitude": 102.6596,
+      "latitude": 25.015,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 2,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40671977",
+      "node_index": 24,
+      "component_id": "china-component-07",
+      "component_label": "C07",
+      "longitude": 120.125552,
+      "latitude": 30.31396,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 2,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40672184",
+      "node_index": 25,
+      "component_id": "china-component-07",
+      "component_label": "C07",
+      "longitude": 120.12163,
+      "latitude": 30.288081,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40674187",
+      "node_index": 26,
+      "component_id": "china-component-07",
+      "component_label": "C07",
+      "longitude": 120.143994,
+      "latitude": 30.265624333333335,
+      "source_station_count": 3,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40936596",
+      "node_index": 27,
+      "component_id": "china-component-08",
+      "component_label": "C08",
+      "longitude": 100.2261955,
+      "latitude": 25.619912,
+      "source_station_count": 2,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40937745",
+      "node_index": 28,
+      "component_id": "china-component-08",
+      "component_label": "C08",
+      "longitude": 100.21771799999999,
+      "latitude": 25.590891,
+      "source_station_count": 2,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 1,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40938443",
+      "node_index": 29,
+      "component_id": "china-component-08",
+      "component_label": "C08",
+      "longitude": 100.178267,
+      "latitude": 25.568941,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 1,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40975363",
+      "node_index": 30,
+      "component_id": "china-component-09",
+      "component_label": "C09",
+      "longitude": 102.7077,
+      "latitude": 24.969,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40975364",
+      "node_index": 31,
+      "component_id": "china-component-09",
+      "component_label": "C09",
+      "longitude": 102.7415,
+      "latitude": 24.9474,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40982502",
+      "node_index": 32,
+      "component_id": "china-component-09",
+      "component_label": "C09",
+      "longitude": 102.7074,
+      "latitude": 24.928195,
+      "source_station_count": 3,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 2,
+      "outdegree": 0
+    },
+    {
+      "node_id": "40350818",
+      "node_index": 33,
+      "component_id": "china-component-10",
+      "component_label": "C10",
+      "longitude": 117.5446,
+      "latitude": 40.0398,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "headwater",
+      "indegree": 0,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40350945",
+      "node_index": 34,
+      "component_id": "china-component-10",
+      "component_label": "C10",
+      "longitude": 117.4714495,
+      "latitude": 40.0391015,
+      "source_station_count": 2,
+      "mapping_review": false,
+      "role": "internal",
+      "indegree": 1,
+      "outdegree": 1
+    },
+    {
+      "node_id": "40351660",
+      "node_index": 35,
+      "component_id": "china-component-10",
+      "component_label": "C10",
+      "longitude": 117.4351,
+      "latitude": 40.0292,
+      "source_station_count": 1,
+      "mapping_review": false,
+      "role": "outlet",
+      "indegree": 1,
+      "outdegree": 0
+    }
+  ],
+  "edges": [
+    {
+      "src_station_id": "40382689",
+      "dst_station_id": "40382928",
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "travel_time_prior_days": 0.29366669058799744,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40382928",
+      "dst_station_id": "40384149",
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "travel_time_prior_days": 0.03500000759959221,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40384148",
+      "dst_station_id": "40384274",
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "travel_time_prior_days": 0.2433333396911621,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40384149",
+      "dst_station_id": "40384274",
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "travel_time_prior_days": 0.22299998998641968,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40376347",
+      "dst_station_id": "40377224",
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "travel_time_prior_days": 0.4113333523273468,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40376480",
+      "dst_station_id": "40377224",
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "travel_time_prior_days": 0.5023333430290222,
+      "rounded_prior_lag_days": 1
+    },
+    {
+      "src_station_id": "40377224",
+      "dst_station_id": "40378426",
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "travel_time_prior_days": 0.12866665422916412,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40484159",
+      "dst_station_id": "40494035",
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "travel_time_prior_days": 0.7599999904632568,
+      "rounded_prior_lag_days": 1
+    },
+    {
+      "src_station_id": "40494035",
+      "dst_station_id": "40494036",
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "travel_time_prior_days": 1.4713332653045654,
+      "rounded_prior_lag_days": 1
+    },
+    {
+      "src_station_id": "40494513",
+      "dst_station_id": "40494036",
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "travel_time_prior_days": 0.059666648507118225,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40320483",
+      "dst_station_id": "40320975",
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "travel_time_prior_days": 0.24399998784065247,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40320975",
+      "dst_station_id": "40320974",
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "travel_time_prior_days": 0.12399999052286148,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40322334",
+      "dst_station_id": "40320974",
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "travel_time_prior_days": 0.19733332097530365,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40390596",
+      "dst_station_id": "40390597",
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "travel_time_prior_days": 0.09933331608772278,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40391228",
+      "dst_station_id": "40390596",
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "travel_time_prior_days": 0.08966664969921112,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40391508",
+      "dst_station_id": "40390596",
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "travel_time_prior_days": 0.3060000240802765,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40971316",
+      "dst_station_id": "40971577",
+      "component_id": "china-component-06",
+      "component_label": "C06",
+      "travel_time_prior_days": 0.2476666420698166,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40971317",
+      "dst_station_id": "40971577",
+      "component_id": "china-component-06",
+      "component_label": "C06",
+      "travel_time_prior_days": 0.38600000739097595,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40672184",
+      "dst_station_id": "40671977",
+      "component_id": "china-component-07",
+      "component_label": "C07",
+      "travel_time_prior_days": 0.08799997717142105,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40674187",
+      "dst_station_id": "40671977",
+      "component_id": "china-component-07",
+      "component_label": "C07",
+      "travel_time_prior_days": 0.3463333547115326,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40936596",
+      "dst_station_id": "40937745",
+      "component_id": "china-component-08",
+      "component_label": "C08",
+      "travel_time_prior_days": 0.08799997717142105,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40937745",
+      "dst_station_id": "40938443",
+      "component_id": "china-component-08",
+      "component_label": "C08",
+      "travel_time_prior_days": 0.09866666793823242,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40975363",
+      "dst_station_id": "40982502",
+      "component_id": "china-component-09",
+      "component_label": "C09",
+      "travel_time_prior_days": 0.18133331835269928,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40975364",
+      "dst_station_id": "40982502",
+      "component_id": "china-component-09",
+      "component_label": "C09",
+      "travel_time_prior_days": 0.21933333575725555,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40350818",
+      "dst_station_id": "40350945",
+      "component_id": "china-component-10",
+      "component_label": "C10",
+      "travel_time_prior_days": 0.2083333134651184,
+      "rounded_prior_lag_days": 0
+    },
+    {
+      "src_station_id": "40350945",
+      "dst_station_id": "40351660",
+      "component_id": "china-component-10",
+      "component_label": "C10",
+      "travel_time_prior_days": 0.1966666579246521,
+      "rounded_prior_lag_days": 0
+    }
+  ],
+  "components": [
+    {
+      "component_id": "china-component-01",
+      "component_label": "C01",
+      "node_count": 5,
+      "edge_count": 4,
+      "headwater_nodes": [
+        "40382689",
+        "40384148"
+      ],
+      "outlet_nodes": [
+        "40384274"
+      ],
+      "topological_depth": 3
+    },
+    {
+      "component_id": "china-component-02",
+      "component_label": "C02",
+      "node_count": 4,
+      "edge_count": 3,
+      "headwater_nodes": [
+        "40376347",
+        "40376480"
+      ],
+      "outlet_nodes": [
+        "40378426"
+      ],
+      "topological_depth": 2
+    },
+    {
+      "component_id": "china-component-03",
+      "component_label": "C03",
+      "node_count": 4,
+      "edge_count": 3,
+      "headwater_nodes": [
+        "40484159",
+        "40494513"
+      ],
+      "outlet_nodes": [
+        "40494036"
+      ],
+      "topological_depth": 2
+    },
+    {
+      "component_id": "china-component-04",
+      "component_label": "C04",
+      "node_count": 4,
+      "edge_count": 3,
+      "headwater_nodes": [
+        "40320483",
+        "40322334"
+      ],
+      "outlet_nodes": [
+        "40320974"
+      ],
+      "topological_depth": 2
+    },
+    {
+      "component_id": "china-component-05",
+      "component_label": "C05",
+      "node_count": 4,
+      "edge_count": 3,
+      "headwater_nodes": [
+        "40391228",
+        "40391508"
+      ],
+      "outlet_nodes": [
+        "40390597"
+      ],
+      "topological_depth": 2
+    },
+    {
+      "component_id": "china-component-06",
+      "component_label": "C06",
+      "node_count": 3,
+      "edge_count": 2,
+      "headwater_nodes": [
+        "40971316",
+        "40971317"
+      ],
+      "outlet_nodes": [
+        "40971577"
+      ],
+      "topological_depth": 1
+    },
+    {
+      "component_id": "china-component-07",
+      "component_label": "C07",
+      "node_count": 3,
+      "edge_count": 2,
+      "headwater_nodes": [
+        "40672184",
+        "40674187"
+      ],
+      "outlet_nodes": [
+        "40671977"
+      ],
+      "topological_depth": 1
+    },
+    {
+      "component_id": "china-component-08",
+      "component_label": "C08",
+      "node_count": 3,
+      "edge_count": 2,
+      "headwater_nodes": [
+        "40936596"
+      ],
+      "outlet_nodes": [
+        "40938443"
+      ],
+      "topological_depth": 2
+    },
+    {
+      "component_id": "china-component-09",
+      "component_label": "C09",
+      "node_count": 3,
+      "edge_count": 2,
+      "headwater_nodes": [
+        "40975363",
+        "40975364"
+      ],
+      "outlet_nodes": [
+        "40982502"
+      ],
+      "topological_depth": 1
+    },
+    {
+      "component_id": "china-component-10",
+      "component_label": "C10",
+      "node_count": 3,
+      "edge_count": 2,
+      "headwater_nodes": [
+        "40350818"
+      ],
+      "outlet_nodes": [
+        "40351660"
+      ],
+      "topological_depth": 2
+    }
+  ]
+}

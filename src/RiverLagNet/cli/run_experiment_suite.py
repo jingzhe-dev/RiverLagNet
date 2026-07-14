@@ -26,6 +26,11 @@ from RiverLagNet.analysis.robustness_summary import (
     write_validation_summary,
 )
 from RiverLagNet.analysis.result_visualization import render_experiment_summary_figure
+from RiverLagNet.analysis.river_graph_visualization import (
+    build_river_graph_summary,
+    render_river_graph_figure,
+    write_river_graph_summary,
+)
 from RiverLagNet.analysis.synthetic_identifiability import (
     run_identifiability_gate,
     write_identifiability_gate,
@@ -81,11 +86,50 @@ def run(argv: Sequence[str] | None = None) -> None:
                 os.path.relpath(figure_png, start=summary_markdown.parent)
             ).as_posix(),
         }
+        graph_message = ""
+        if preset.graph_data_root is not None:
+            if not all(
+                path is not None
+                for path in (
+                    preset.graph_summary_json,
+                    preset.graph_figure_png,
+                    preset.graph_figure_pdf,
+                )
+            ):
+                raise ValueError("graph visualization preset paths are incomplete")
+            graph_summary_path = preset.graph_summary_json
+            graph_png = preset.graph_figure_png
+            graph_pdf = preset.graph_figure_pdf
+            assert graph_summary_path is not None and graph_png is not None and graph_pdf is not None
+            graph_summary = build_river_graph_summary(preset.graph_data_root)
+            write_river_graph_summary(graph_summary, graph_summary_path)
+            render_river_graph_figure(graph_summary, graph_png, graph_pdf)
+            summary["graph_visualization"] = {
+                "summary": graph_summary_path.as_posix(),
+                "png": graph_png.as_posix(),
+                "pdf": graph_pdf.as_posix(),
+                "markdown_png": Path(
+                    os.path.relpath(graph_png, start=summary_markdown.parent)
+                ).as_posix(),
+                "markdown_summary": Path(
+                    os.path.relpath(graph_summary_path, start=summary_markdown.parent)
+                ).as_posix(),
+                "node_count": graph_summary["node_count"],
+                "edge_count": graph_summary["edge_count"],
+                "component_count": graph_summary["component_count"],
+                "rounded_prior_lag_counts": graph_summary[
+                    "rounded_prior_lag_counts"
+                ],
+            }
+            graph_message = (
+                f" graph_summary={graph_summary_path} graph_png={graph_png} "
+                f"graph_pdf={graph_pdf}"
+            )
         render_experiment_summary_figure(summary, figure_png, figure_pdf)
         write_validation_summary(summary, summary_json, summary_markdown)
         print(
             f"summary_json={summary_json} summary_markdown={summary_markdown} "
-            f"figure_png={figure_png} figure_pdf={figure_pdf}"
+            f"figure_png={figure_png} figure_pdf={figure_pdf}{graph_message}"
         )
         return
     if args.evaluate_final:

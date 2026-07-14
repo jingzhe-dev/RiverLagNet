@@ -206,5 +206,19 @@
     "png": "docs/figures/china_real_daily_lag_ablation_summary.png",
     "pdf": "docs/figures/china_real_daily_lag_ablation_summary.pdf",
     "markdown_png": "figures/china_real_daily_lag_ablation_summary.png"
+  },
+  "graph_visualization": {
+    "summary": "experiments/china_real_daily_graph_summary.json",
+    "png": "docs/figures/china_real_daily_upstream_graph.png",
+    "pdf": "docs/figures/china_real_daily_upstream_graph.pdf",
+    "markdown_png": "figures/china_real_daily_upstream_graph.png",
+    "markdown_summary": "../experiments/china_real_daily_graph_summary.json",
+    "node_count": 36,
+    "edge_count": 26,
+    "component_count": 10,
+    "rounded_prior_lag_counts": {
+      "0": 23,
+      "1": 3
+    }
   }
 }

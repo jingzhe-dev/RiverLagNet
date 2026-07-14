@@ -34,6 +34,10 @@ class SuitePreset:
     trainer_override: str | None = None
     experiment_override: str | None = None
     description: str | None = None
+    graph_data_root: Path | None = None
+    graph_summary_json: Path | None = None
+    graph_figure_png: Path | None = None
+    graph_figure_pdf: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +145,10 @@ REAL_LAG_V1 = SuitePreset(
         "Real-source daily China observations with imputed values masked in a "
         "paired five-seed lag ablation."
     ),
+    graph_data_root=Path("data/processed/china-real-daily-v0.1"),
+    graph_summary_json=Path("experiments/china_real_daily_graph_summary.json"),
+    graph_figure_png=Path("docs/figures/china_real_daily_upstream_graph.png"),
+    graph_figure_pdf=Path("docs/figures/china_real_daily_upstream_graph.pdf"),
 )
 SUITE_PRESETS = {
     preset.name: preset

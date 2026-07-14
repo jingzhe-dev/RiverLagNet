@@ -537,4 +537,5 @@ RiverLagNet 可训练
 - 每次 pytest 或 smoke test 结束后，删除 `.pytest_cache`、`__pycache__`、`build/pytest`、`build/smoke` 以及 `runs/smoke_*`、`runs/test_*`；
 - 正式实验的 checkpoint、指标和运行目录不属于测试产物，不得由清理程序删除；
 - 每次正式实验汇总必须同时生成受版本控制的 PNG 和 PDF 结果图；
+- 使用河网的正式实验还必须生成带箭头的上游→下游关系图，并明确节点坐标与边颜色语义；
 - 图必须由机器可读汇总自动生成，保持指标、误差范围和结论一致，不得手工美化数值。
