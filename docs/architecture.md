@@ -85,7 +85,14 @@ never collapsed at the public interface.
 
 ## Training
 
-`RiverForecastModule` provides masked Huber loss and the same mask-aware MAE, RMSE, and NSE functions used by evaluation. Validation macro NSE is the primary checkpoint and early-stopping metric. Channels with no observations or zero target variance are excluded from macro NSE. `RiverDataModule` supplies all models with identical split and batching behavior.
+`RiverForecastModule` uses masked Huber as the primary loss. A configurable,
+non-negative `nse_aux_weight` can add a target-balanced masked `1 - NSE`
+auxiliary term for explicitly recorded selection-alignment experiments; its
+default is zero. Training and evaluation share the same mask-aware MAE, RMSE,
+and NSE definitions. Validation macro NSE is the primary checkpoint and
+early-stopping metric. Channels with no observations or zero target variance
+are excluded from macro NSE. `RiverDataModule` supplies all models with
+identical split and batching behavior.
 
 CSV and TensorBoard loggers, learning-rate monitoring, checkpointing, early stopping, gradient clipping, deterministic seeds, timing, peak CUDA memory, CPU fallback, and `fast_dev_run` are configured through Lightning and Hydra.
 

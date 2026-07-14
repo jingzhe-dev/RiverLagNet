@@ -14,7 +14,7 @@ from RiverLagNet.data.schema import TARGET_NAMES
 from RiverLagNet.models.baselines import PersistenceModel, StationGRU, StaticDirectedGAT
 from RiverLagNet.models.riverlag_net import RiverLagNet
 
-from .losses import masked_huber_loss
+from .losses import masked_huber_loss, masked_nse_loss
 from .metrics import masked_metric_dict
 
 
@@ -66,6 +66,7 @@ class RiverForecastModule(LightningModule):
         learning_rate: float = 1e-3,
         weight_decay: float = 1e-4,
         huber_delta: float = 1.0,
+        nse_aux_weight: float = 0.0,
         target_mean: Sequence[float] | None = None,
         target_scale: Sequence[float] | None = None,
     ) -> None:
@@ -79,6 +80,8 @@ class RiverForecastModule(LightningModule):
             raise ValueError("target normalization must contain exactly three values")
         if torch.any(scale <= 0):
             raise ValueError("target_scale must be positive")
+        if nse_aux_weight < 0:
+            raise ValueError("nse_aux_weight cannot be negative")
         self.register_buffer("target_mean", mean.to(torch.float32))
         self.register_buffer("target_scale", scale.to(torch.float32))
         self.model = model
@@ -101,8 +104,21 @@ class RiverForecastModule(LightningModule):
 
     def training_step(self, batch: dict[str, Tensor], batch_idx: int) -> Tensor:
         prediction = self(batch)
-        loss = masked_huber_loss(prediction, batch["y"], batch["y_mask"], self.hparams.huber_delta)
+        huber = masked_huber_loss(
+            prediction, batch["y"], batch["y_mask"], self.hparams.huber_delta
+        )
+        loss = huber
+        if self.hparams.nse_aux_weight:
+            nse_aux = masked_nse_loss(prediction, batch["y"], batch["y_mask"])
+            loss = loss + self.hparams.nse_aux_weight * nse_aux
         if self._trainer is not None:
+            self.log(
+                "train_huber_loss",
+                huber,
+                on_step=False,
+                on_epoch=True,
+                batch_size=batch["x"].shape[0],
+            )
             self.log(
                 "train_loss",
                 loss,

@@ -4,6 +4,7 @@ precision: 16-mixed
 max_epochs: 50
 learning_rate: 0.001
 weight_decay: 0.0001
+nse_aux_weight: 0.0
 deterministic: true
 gradient_clip_val: 1.0
 early_stopping_patience: 8
