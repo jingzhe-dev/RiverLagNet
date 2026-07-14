@@ -85,3 +85,4 @@
 - 2026-07-14｜Station GRU 主干基线首次无法 warm-start RiverLagNet｜沿用此前 RiverLagNet-no-graph checkpoint 的兼容假设，未覆盖独立 Station GRU 缺少图分支参数的情况｜仅对明确识别为 station-only 的 checkpoint 允许缺少图分支并增加回归测试｜更换基线模型类型后先验证 checkpoint 参数契约再启动正式实验
 - 2026-07-14｜输出输送模块首次 GPU mixed-precision smoke 因计数张量类型不一致失败｜单元测试只覆盖 float32，`torch.ones` 默认 float32 与 AMP 的 float16 累加目标冲突｜计数张量显式继承预测 dtype 并增加 float16 回归测试｜所有模型内新建浮点张量必须继承输入 device 与 dtype
 - 2026-07-15｜多尺度路径功能的两次组合补丁因猜测既有上下文而失败｜没有先读取测试和架构文档的精确段落就合并多个文件修改｜读取真实上下文后拆成小补丁并成功应用｜修改既有测试或文档前先读取准确锚点，组合补丁只使用已核实上下文
+- 2026-07-15｜正式实验完成后的首次进展更新误报了近似 NSE 数值｜在读取自动实验账本前根据 checkpoint 四位显示值估算了未验证的精确数｜立即读取 `experiments/results.tsv` 并更正为 0.5888225436｜正式数值更新必须先读取自动账本，不从截断显示反推精确值
