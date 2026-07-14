@@ -93,6 +93,7 @@ def test_crossformer_residual_training_freezes_local_transformer() -> None:
                 "history_diffusion.",
                 "graph_attention.",
                 "cross_fusion.",
+                "forecast_transport.",
                 "upstream_decoder.",
             )
         )

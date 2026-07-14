@@ -8,6 +8,7 @@ from torch import Tensor, nn
 from RiverLagNet.data.graph_builder import build_graph_variant, expand_directed_paths
 
 from .decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
+from .forecast_transport_fusion import TargetConditionedForecastTransport
 from .graph_cross_attention import (
     EdgeLagHorizonSparseAttention,
     TransformerGraphCrossFusion,
@@ -24,8 +25,9 @@ class RiverGraphCrossFormer(nn.Module):
 
     1. Multi-scale Ancestor-Path Lag Attention jointly selects directed paths
        and causally observable travel lags for each forecast lead.
-    2. Transformer-GNN Cross Fusion lets local temporal queries select among
-       graph routing-head tokens before a zero-started upstream correction.
+    2. Dual-space Transformer-GNN Fusion combines hidden routing-head tokens
+       and target-conditioned upstream forecast transport in zero-started
+       residual corrections.
     """
 
     def __init__(
@@ -86,6 +88,9 @@ class RiverGraphCrossFormer(nn.Module):
             prior_scale_days=lag_prior_scale_days,
         )
         self.cross_fusion = TransformerGraphCrossFusion(hidden_dim, graph_heads)
+        self.forecast_transport = TargetConditionedForecastTransport(
+            hidden_dim, target_dim, graph_heads
+        )
         self.upstream_decoder = UpstreamResidualDecoder(hidden_dim, target_dim)
         with torch.no_grad():
             for head in self.upstream_decoder.heads:
@@ -104,6 +109,7 @@ class RiverGraphCrossFormer(nn.Module):
             self.history_diffusion,
             self.graph_attention,
             self.cross_fusion,
+            self.forecast_transport,
             self.upstream_decoder,
         ):
             for parameter in module.parameters():
@@ -174,7 +180,20 @@ class RiverGraphCrossFormer(nn.Module):
         graph_state, self.fusion_weights = self.cross_fusion(
             local_context, graph_heads
         )
-        return local_prediction + self.upstream_decoder(graph_state)
+        target_correction = self.forecast_transport(
+            x[..., : local_prediction.shape[-1]],
+            x_mask[..., : local_prediction.shape[-1]],
+            local_prediction,
+            local_context,
+            graph_state,
+            attention_edges,
+            self.attention_weights,
+        )
+        return (
+            local_prediction
+            + self.upstream_decoder(graph_state)
+            + target_correction
+        )
 
     def _expanded_graph(
         self, edge_index: Tensor, edge_attr: Tensor

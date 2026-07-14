@@ -79,6 +79,7 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
         and not name.startswith("model.output_transport.")
         and not name.startswith("model.history_propagation.")
         and not name.startswith("model.topology_encoder.")
+        and not name.startswith("model.forecast_transport.")
         and not (
             station_only_checkpoint
             and name.startswith(

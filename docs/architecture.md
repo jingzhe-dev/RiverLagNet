@@ -178,22 +178,25 @@ loss at long horizons, multi-hop attenuation, horizon/lag misalignment, and
 dense attention dilution in one normalized operator. Its
 weights remain predictive routing preferences, not causal effect estimates.
 
-### Innovation 2: Transformer–GNN Head Cross Fusion (TGCF)
+### Innovation 2: Dual-space Transformer–GNN Forecast Fusion (DTGFF)
 
 **Problem.** A serial `Transformer → GNN` stack forces the GNN output to modify
 all temporal representations in the same way; concatenation treats local and
 upstream features as interchangeable. Both approaches obscure whether a
 specific temporal state actually needs a specific river-routing mechanism.
+They also fuse only latent vectors: the graph branch never directly sees that
+its practical job is to correct three different water-quality trajectories.
 
 **Method.** The Temporal Transformer produces the local destination query
 `q_i,h`. MAP-LHSA produces one upstream token `g_i,h,r` per graph-routing head.
-TGCF performs a second, head-level cross-attention:
+The hidden-space branch, **Transformer–GNN Head Cross Fusion (TGCF)**,
+performs a second, head-level cross-attention:
 
 ```text
 beta_i,h,r = softmax_r(<W_q q_i,h, W_g,r g_i,h,r> / sqrt(D))
 g_i,h = sum_r beta_i,h,r W_g,r g_i,h,r
 z_i,h = sigmoid(G[q_i,h, g_i,h]) ⊙ W_z g_i,h
-y_hat_i,h = y_local_i,h + decoder_upstream(z_i,h)
+y_hidden_i,h = decoder_upstream(z_i,h)
 ```
 
 This makes the Transformer state the query and the GNN routing heads the
@@ -202,7 +205,29 @@ state rather than a fixed addition. The upstream output heads start at zero,
 so the complete graph model initially equals its no-graph Transformer. A
 headwater has no valid GNN token and its fused residual remains exactly zero.
 
-Together, CMLHD + MAP-LHSA + TGCF form a specific solution to the project
+The target-space branch, **Target-Conditioned Forecast Transport (TCFT)**,
+uses the same path-lag attention but mixes routing heads separately for NH3N,
+CODMn, and TP. Its source trajectory is observed history when `h-τ<=0` and
+the local upstream Transformer forecast when `h-τ>0`. For target `c`:
+
+```text
+pi_c,r = softmax_r(target_head_logits_c,r)
+w_p,h,τ,c = sum_r pi_c,r alpha_p,h,τ,r
+u_i,h,c = normalized_sum_(p:j→i,τ) w_p,h,τ,c source_j,h,τ,c
+
+delta_i,h = F_zero([q_i,h, g_i,h, y_local_i,h, u_i,h,
+                    u_i,h - y_local_i,h])
+y_hat_i,h = y_local_i,h + y_hidden_i,h + 1[valid upstream] delta_i,h
+```
+
+`F_zero` has a zero-initialized final layer. DTGFF therefore starts exactly at
+the no-graph Transformer, yet it can learn both a hidden-state correction and
+an explicit pollutant-specific forecast-transport correction. TCFT addresses
+the latent-to-target mismatch and avoids forcing NH3N, CODMn, and TP to use
+the same routing-head mixture. Missing historical targets are masked before
+path-lag renormalization; no future observation or future target is read.
+
+Together, CMLHD + MAP-LHSA + DTGFF form a specific solution to the project
 question: preserve transient upstream covariates before temporal compression,
 select physically admissible edge-lag routes for each prediction lead, and
 inject them only when the local Transformer query requests that routing head.
