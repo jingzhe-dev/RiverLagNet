@@ -47,7 +47,15 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
     state_dict = checkpoint.get("state_dict")
     if not isinstance(state_dict, dict):
         raise ValueError("warm-start checkpoint does not contain a Lightning state_dict")
-    module.load_state_dict(state_dict, strict=True)
+    incompatible = module.load_state_dict(state_dict, strict=False)
+    allowed_missing = {"model.message_passing.lag_residual_scale"}
+    unexpected_missing = set(incompatible.missing_keys) - allowed_missing
+    if unexpected_missing or incompatible.unexpected_keys:
+        raise ValueError(
+            "warm-start checkpoint is incompatible: "
+            f"missing={sorted(unexpected_missing)}, "
+            f"unexpected={sorted(incompatible.unexpected_keys)}"
+        )
 
 
 def _experiment_record(

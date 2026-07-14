@@ -47,6 +47,7 @@ class DirectedLagAwareMessagePassing(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, 1),
         )
+        self.lag_residual_scale = nn.Parameter(torch.zeros(()))
         self.dropout = nn.Dropout(dropout)
 
     def forward(
@@ -99,6 +100,10 @@ class DirectedLagAwareMessagePassing(nn.Module):
             normalized = torch.softmax(logits[:, incoming].reshape(batch, -1).float(), dim=-1)
             attention[:, incoming] = normalized.reshape(batch, int(incoming.sum()), lag_count)
         messages = self.message_projection(source_states)
+        if self.lag_mode == "learned_lag":
+            lag_mix = torch.tanh(self.lag_residual_scale).to(messages.dtype)
+            current_messages = messages[:, :, :1]
+            messages = current_messages + lag_mix * (messages - current_messages)
         message_weights = self.dropout(attention).to(messages.dtype)
         edge_messages = (message_weights[..., None] * messages).sum(dim=2).to(h_seq.dtype)
         upstream = h_seq.new_zeros(batch, nodes, hidden)
@@ -190,6 +195,10 @@ class DirectedLagAwareMessagePassing(nn.Module):
             )
 
         messages = self.message_projection(source_states)
+        if self.lag_mode == "learned_lag":
+            lag_mix = torch.tanh(self.lag_residual_scale).to(messages.dtype)
+            current_messages = messages[:, :, :, :1]
+            messages = current_messages + lag_mix * (messages - current_messages)
         message_weights = self.dropout(attention).to(messages.dtype)
         edge_messages = (message_weights[..., None] * messages).sum(dim=3).to(h_seq.dtype)
         upstream = h_seq.new_zeros(batch, output_window, nodes, hidden)

@@ -45,6 +45,11 @@ Scores use the destination local state, aligned source state, encoded edge
 attributes, and a learned lag embedding. Learned-lag scores add a configurable
 Gaussian log-prior centered on `travel_time_prior_days`; the neural score
 remains a trainable residual that can move probability away from the prior.
+For `learned_lag`, the routed state is parameterized as the latest observable
+upstream state plus a learned scalar multiple of the attention-weighted lag
+difference. The scalar is zero-initialized and passed through `tanh`, so the
+full model starts from the empirically stronger current-upstream path and must
+earn any departure toward historical states on validation data.
 Softmax is computed jointly over every incoming edge and available lag for
 each destination and horizon. Consequently, each candidate set sums to one. A
 node with no incoming edges receives an exact zero upstream state.

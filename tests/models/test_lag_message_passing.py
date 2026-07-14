@@ -52,6 +52,28 @@ def test_learned_attention_sums_to_one_per_destination_over_edges_and_lags() -> 
     assert torch.all(upstream[:, 2] == 0)
 
 
+def test_learned_lag_zero_starts_from_current_upstream_state() -> None:
+    module = DirectedLagAwareMessagePassing(
+        1, edge_dim=1, max_lag=2, lag_mode="learned_lag", prior_strength=0.0
+    )
+    _make_uniform(module)
+    h_seq = torch.tensor(
+        [[[[1.0], [0.0]], [[2.0], [0.0]], [[9.0], [0.0]]]]
+    )
+    edges = torch.tensor([[0], [1]])
+
+    upstream, attention = module(
+        h_seq, h_seq[:, -1], edges, torch.zeros(1, 1)
+    )
+
+    assert torch.allclose(attention[0, 0], torch.full((3,), 1.0 / 3.0))
+    assert torch.allclose(upstream[0, 1], torch.tensor([9.0]))
+    with torch.no_grad():
+        module.lag_residual_scale.fill_(10.0)
+    lagged, _ = module(h_seq, h_seq[:, -1], edges, torch.zeros(1, 1))
+    assert torch.allclose(lagged[0, 1], torch.tensor([4.0]), atol=1e-3)
+
+
 def test_training_dropout_does_not_change_reported_attention_normalization() -> None:
     torch.manual_seed(0)
     module = DirectedLagAwareMessagePassing(
