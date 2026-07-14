@@ -1,0 +1,5 @@
+name: china_real_daily_mainstem_61_extended_${model.name}_seed${seed}
+description: Topology-selected 61-node longest directed mainstem from the real 1068-node extended-input panel; selection is independent of water-quality outcomes.
+status: baseline
+record_result: true
+results_path: experiments/results.tsv
