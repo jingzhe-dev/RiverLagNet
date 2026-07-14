@@ -120,6 +120,21 @@ CSV and TensorBoard loggers, learning-rate monitoring, checkpointing, early stop
 
 Attention weights indicate learned routing preference only. They are not causal effect estimates.
 
+## Current validation-selected real-data candidate
+
+The contracted real-data architecture screen currently selects the two-stage
+directed `no_lag` upstream residual. Across seeds 42--46 it improves validation
+macro NSE over its paired frozen `no_graph` checkpoint by
+`0.001101 ± 0.000255` with five of five positive differences. The gain is
+`0.001914 ± 0.000457` on the 112 nodes with incoming upstream edges, while the
+126 headwater predictions remain exactly unchanged. The largest horizon-band
+gain is at days 15--30 (`+0.003537`). These are validation increments, not
+causal effects; the held-out test split remains unopened.
+
+The anchored learned-lag screen has not exceeded this candidate, so learned
+lag remains an unvalidated mechanism rather than part of the current empirical
+claim. Exact evidence and limitations are in `docs/core_result.md`.
+
 The `shuffled_graph` ablation samples a deterministic directed null graph with
 the same node set and edge count, while excluding self-loops and every true
 edge. Edge attributes retain their empirical distribution but are detached

@@ -66,18 +66,19 @@ conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily mod
 
 For the contracted artifact, replace both overrides with `data=china_real_daily_contracted experiment=china_real_daily_contracted`.
 
-## Contracted real-data seed-42 benchmark
+## Contracted real-data attributable graph gain
 
-Persistence, Station GRU, Static Directed GAT, and RiverLagNet completed the same validation-only formal protocol on the 238-node contracted graph. Validation macro NSE was `0.2257`, `0.5129`, `0.5161`, and `0.5135`, respectively. RiverLagNet was `+0.0007` versus Station GRU and `-0.0025` versus Static Directed GAT; this single-seed result does not establish a stable learned-lag advantage. The held-out test set has not been used.
+The current core result uses five paired seeds on the 238-node, 237-edge contracted graph. Each directed model starts from its own validation-selected `no_graph` checkpoint; the local encoder, GRU, and decoder are frozen, upstream output heads start at zero, and only the upstream residual path is trained. Directed upstream information improves validation macro NSE by `0.001101 ± 0.000255` across seeds (`5/5` positive). On the 112 nodes that can actually receive upstream messages, the mean gain is `0.001914 ± 0.000457`; all 126 headwater predictions remain bitwise unchanged. Gains are largest at days 15–30 (`+0.003537` macro NSE). The held-out test set remains unopened.
 
-![Contracted seed-42 validation metrics](docs/figures/china_real_daily_contracted_seed42_metrics.png)
+![Contracted real-data attributable graph gain](docs/figures/real_contracted_graph_gain_v9.png)
 
-The next registered suite is resumable and pairs `no_lag`, `fixed_lag`, and `learned_lag` across seeds 42–46:
+Reproduce the checkpoint-level audit, node table, and PNG/PDF figure with:
 
 ```powershell
-conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_contracted_lag_v2
-conda run -n DeepWater python -m RiverLagNet.cli.run_experiment_suite --suite real_contracted_lag_v2 --summarize
+conda run -n DeepWater python -m RiverLagNet.cli.summarize_graph_gain --device cuda
 ```
+
+See the [core result](docs/core_result.md), [machine-readable summary](experiments/real_contracted_graph_gain_v9_summary.json), and [node-level gains](experiments/real_contracted_graph_gain_v9_nodes.csv). Learned lag is not claimed as validated: the best current candidate is the attributable directed current-upstream residual, while the anchored learned-lag seed-42 screen remained below `no_lag`.
 
 ## Train
 
