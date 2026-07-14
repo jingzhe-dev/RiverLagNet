@@ -104,3 +104,70 @@ def test_upstream_residual_training_zero_starts_and_freezes_local_backbone() -> 
     assert any(parameter.requires_grad for parameter in model.message_passing.parameters())
     assert any(parameter.requires_grad for parameter in model.fusion.parameters())
     assert any(parameter.requires_grad for parameter in model.upstream_decoder.parameters())
+
+
+def test_linear_horizon_gate_strictly_nests_existing_graph_model() -> None:
+    torch.manual_seed(19)
+    base = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=3,
+        graph_variant="directed",
+        lag_mode="no_lag",
+    ).eval()
+    calibrated = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=3,
+        graph_variant="directed",
+        lag_mode="no_lag",
+        horizon_gate_mode="linear",
+    ).eval()
+    incompatible = calibrated.load_state_dict(base.state_dict(), strict=False)
+    assert set(incompatible.missing_keys) == {
+        "horizon_gate.offset",
+        "horizon_gate.slope",
+        "horizon_gate.normalized_lead",
+    }
+    inputs = {
+        "x": torch.randn(2, 8, 4, 3),
+        "x_mask": torch.ones(2, 8, 4, 3, dtype=torch.bool),
+        "x_quality": torch.ones(2, 8, 4, 3),
+        "static": torch.randn(4, 2),
+        "edge_index": torch.tensor([[0, 1, 1], [1, 2, 3]]),
+        "edge_attr": torch.tensor(
+            [[4.0, 0.1, 1.0], [3.0, 0.2, 2.0], [2.0, 0.3, 1.0]]
+        ),
+        "time_features": torch.randn(2, 8, 4),
+    }
+
+    assert torch.equal(calibrated(**inputs), base(**inputs))
+
+
+def test_horizon_calibration_trains_only_two_gate_parameters() -> None:
+    model = RiverLagNet(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=3,
+        hidden_dim=8,
+        output_window=6,
+        max_lag=3,
+        horizon_gate_mode="linear",
+    )
+
+    model.configure_horizon_calibration_training()
+    model.train()
+    trainable = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+
+    assert trainable == ["horizon_gate.offset", "horizon_gate.slope"]
+    assert not model.message_passing.training
+    assert model.horizon_gate is not None and model.horizon_gate.training

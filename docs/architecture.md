@@ -135,6 +135,21 @@ The anchored learned-lag screen has not exceeded this candidate, so learned
 lag remains an unvalidated mechanism rather than part of the current empirical
 claim. Exact evidence and limitations are in `docs/core_result.md`.
 
+The five-seed checkpoint audit also shows a predeclared horizon pattern:
+days 1--7 lose `0.001089` NSE on average, whereas days 8--14 and 15--30 gain
+`0.001242` and `0.003537`. The optional `linear` horizon gate therefore applies
+a two-parameter bounded scale to the already decoded upstream correction:
+
+```text
+scale(h) = 2 * sigmoid(offset + slope * normalized_lead(h))
+```
+
+Both parameters start at zero, making every scale exactly one and the new
+model exactly equal to the selected checkpoint. Horizon-calibration training
+freezes the entire graph forecaster, keeps its dropout modules in evaluation
+mode, and updates only `offset` and `slope`. This is an explicitly registered
+validation experiment, not a post-hoc modification of stored predictions.
+
 The `shuffled_graph` ablation samples a deterministic directed null graph with
 the same node set and edge count, while excluding self-loops and every true
 edge. Edge attributes retain their empirical distribution but are detached

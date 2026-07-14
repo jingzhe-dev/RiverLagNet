@@ -1,7 +1,7 @@
 import torch
 
 from RiverLagNet.models.decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
-from RiverLagNet.models.fusion import LocalUpstreamGatedFusion
+from RiverLagNet.models.fusion import BoundedLinearHorizonGate, LocalUpstreamGatedFusion
 from RiverLagNet.models.input_encoder import InputMaskEncoder
 from RiverLagNet.models.temporal_gru import NodeTemporalGRU
 
@@ -65,3 +65,24 @@ def test_fusion_starts_as_a_small_upstream_residual_with_gradient_flow() -> None
     assert upstream.grad.abs().sum() > 0
     assert fusion.gate.weight.grad is not None
     assert fusion.gate.weight.grad.abs().sum() > 0
+
+
+def test_bounded_horizon_gate_strictly_starts_as_identity() -> None:
+    gate = BoundedLinearHorizonGate(output_window=6)
+    correction = torch.randn(2, 6, 4, 3)
+
+    output = gate(correction)
+
+    assert torch.equal(output, correction)
+    assert torch.equal(gate.scales(), torch.ones(6))
+
+
+def test_bounded_horizon_gate_can_increase_weight_with_lead() -> None:
+    gate = BoundedLinearHorizonGate(output_window=6)
+    with torch.no_grad():
+        gate.slope.fill_(2.0)
+
+    scales = gate.scales()
+
+    assert torch.all(scales[1:] > scales[:-1])
+    assert torch.all((scales > 0.0) & (scales < 2.0))

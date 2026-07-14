@@ -48,7 +48,12 @@ def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None
     if not isinstance(state_dict, dict):
         raise ValueError("warm-start checkpoint does not contain a Lightning state_dict")
     incompatible = module.load_state_dict(state_dict, strict=False)
-    allowed_missing = {"model.message_passing.lag_residual_scale"}
+    allowed_missing = {
+        "model.message_passing.lag_residual_scale",
+        "model.horizon_gate.offset",
+        "model.horizon_gate.slope",
+        "model.horizon_gate.normalized_lead",
+    }
     unexpected_missing = set(incompatible.missing_keys) - allowed_missing
     if unexpected_missing or incompatible.unexpected_keys:
         raise ValueError(
@@ -122,6 +127,16 @@ def run(cfg: DictConfig) -> dict[str, Any]:
         model.configure_upstream_residual_training(
             gate_bias=float(cfg.trainer.upstream_gate_bias)
         )
+    if bool(cfg.trainer.horizon_calibration_only):
+        if not isinstance(model, RiverLagNet):
+            raise ValueError("horizon_calibration_only requires model=riverlagnet")
+        if not cfg.trainer.warm_start_checkpoint:
+            raise ValueError("horizon_calibration_only requires warm_start_checkpoint")
+        if bool(cfg.trainer.upstream_residual_only):
+            raise ValueError(
+                "horizon_calibration_only and upstream_residual_only are mutually exclusive"
+            )
+        model.configure_horizon_calibration_training()
     run_dir = Path(str(cfg.run_dir))
     runtime = RuntimeStatsCallback()
     callbacks = [runtime, LearningRateMonitor(logging_interval="epoch")]
