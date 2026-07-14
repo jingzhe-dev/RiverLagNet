@@ -86,6 +86,37 @@ def test_lag_residual_max_mix_must_be_a_fraction() -> None:
             DirectedLagAwareMessagePassing(2, edge_dim=1, lag_residual_max_mix=invalid)
 
 
+def test_zero_lag_residual_exactly_nests_no_lag_edge_routing() -> None:
+    torch.manual_seed(12)
+    no_lag = DirectedLagAwareMessagePassing(
+        3, edge_dim=2, max_lag=3, lag_mode="no_lag", dropout=0.0
+    ).eval()
+    learned = DirectedLagAwareMessagePassing(
+        3,
+        edge_dim=2,
+        max_lag=3,
+        lag_mode="learned_lag",
+        dropout=0.0,
+        lag_residual_max_mix=0.1,
+    ).eval()
+    learned.load_state_dict(no_lag.state_dict())
+    h_seq = torch.randn(2, 6, 4, 3)
+    edges = torch.tensor([[0, 2, 3], [1, 1, 1]])
+    edge_attr = torch.tensor([[0.2, 1.0], [-0.3, 2.0], [0.5, 3.0]])
+
+    base_upstream, base_attention = no_lag.forward_horizons(
+        h_seq, h_seq[:, -1], edges, edge_attr, output_window=4
+    )
+    learned_upstream, learned_attention = learned.forward_horizons(
+        h_seq, h_seq[:, -1], edges, edge_attr, output_window=4
+    )
+
+    assert torch.allclose(learned_upstream, base_upstream, atol=1e-6)
+    assert torch.allclose(
+        learned_attention.sum(dim=-1), base_attention.sum(dim=-1), atol=1e-6
+    )
+
+
 def test_training_dropout_does_not_change_reported_attention_normalization() -> None:
     torch.manual_seed(0)
     module = DirectedLagAwareMessagePassing(

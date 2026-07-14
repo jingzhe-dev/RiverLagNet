@@ -53,9 +53,14 @@ earn any departure toward historical states on validation data. A configurable
 `lag_residual_max_mix` bounds the magnitude of that departure between zero and
 one; cap experiments must be recorded rather than silently changing the
 default.
-Softmax is computed jointly over every incoming edge and available lag for
-each destination and horizon. Consequently, each candidate set sums to one. A
-node with no incoming edges receives an exact zero upstream state.
+For `learned_lag`, incoming-edge weights are normalized from the neural lag-0
+scores, while lag weights are normalized within each edge after adding the
+travel-time prior. Their product is the reported joint edge-lag weight and
+sums to one per destination and horizon. This anchored factorization makes a
+zero lag-residual mix exactly equal to `no_lag`, including at multi-upstream
+confluences. The single-candidate `no_lag` and `fixed_lag` modes retain their
+direct incoming-candidate normalization. A node with no incoming edges
+receives an exact zero upstream state.
 
 `no_lag` is the static-graph ablation and repeats the latest source state at
 every horizon. `fixed_lag` selects the rounded and clipped

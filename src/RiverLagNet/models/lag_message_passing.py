@@ -83,9 +83,10 @@ class DirectedLagAwareMessagePassing(nn.Module):
         lag_context = self.lag_embedding(lag_ids)[None, None].expand(
             batch, edge_index.shape[1], -1, -1
         )
-        logits = self.score_network(
+        neural_logits = self.score_network(
             torch.cat((destination_states, source_states, edge_context, lag_context), dim=-1)
         ).squeeze(-1)
+        logits = neural_logits
         if self.lag_mode == "learned_lag" and self.prior_strength:
             logits = logits + self._travel_time_prior(edge_attr, lag_ids)[None]
         available = lag_ids[None, :] < history
@@ -98,11 +99,28 @@ class DirectedLagAwareMessagePassing(nn.Module):
             available.zero_()
             available.scatter_(1, fixed[:, None], True)
         logits = logits.masked_fill(~available[None], -torch.inf)
-        attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
-        for node in destination.unique(sorted=True):
-            incoming = destination == node
-            normalized = torch.softmax(logits[:, incoming].reshape(batch, -1).float(), dim=-1)
-            attention[:, incoming] = normalized.reshape(batch, int(incoming.sum()), lag_count)
+        if self.lag_mode == "learned_lag":
+            lag_logits = logits.masked_fill(~available[None], -torch.inf)
+            lag_attention = torch.softmax(lag_logits.float(), dim=-1)
+            edge_attention = torch.zeros(
+                (batch, edge_index.shape[1]), device=logits.device, dtype=torch.float32
+            )
+            for node in destination.unique(sorted=True):
+                incoming = destination == node
+                edge_attention[:, incoming] = torch.softmax(
+                    neural_logits[:, incoming, 0].float(), dim=-1
+                )
+            attention = edge_attention[..., None] * lag_attention
+        else:
+            attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
+            for node in destination.unique(sorted=True):
+                incoming = destination == node
+                normalized = torch.softmax(
+                    logits[:, incoming].reshape(batch, -1).float(), dim=-1
+                )
+                attention[:, incoming] = normalized.reshape(
+                    batch, int(incoming.sum()), lag_count
+                )
         messages = self.message_projection(source_states)
         if self.lag_mode == "learned_lag":
             lag_mix = (
@@ -110,8 +128,18 @@ class DirectedLagAwareMessagePassing(nn.Module):
             ).to(messages.dtype)
             current_messages = messages[:, :, :1]
             messages = current_messages + lag_mix * (messages - current_messages)
-        message_weights = self.dropout(attention).to(messages.dtype)
-        edge_messages = (message_weights[..., None] * messages).sum(dim=2).to(h_seq.dtype)
+            lagged_messages = (
+                lag_attention.to(messages.dtype)[..., None] * messages
+            ).sum(dim=2)
+            edge_messages = (
+                self.dropout(edge_attention).to(messages.dtype)[..., None]
+                * lagged_messages
+            ).to(h_seq.dtype)
+        else:
+            message_weights = self.dropout(attention).to(messages.dtype)
+            edge_messages = (message_weights[..., None] * messages).sum(dim=2).to(
+                h_seq.dtype
+            )
         upstream = h_seq.new_zeros(batch, nodes, hidden)
         upstream.index_add_(1, destination, edge_messages)
         return upstream, attention
@@ -177,28 +205,44 @@ class DirectedLagAwareMessagePassing(nn.Module):
         lag_context = self.lag_embedding(lag_ids)[None, None, None].expand(
             batch, output_window, edge_count, -1, -1
         )
-        logits = self.score_network(
+        neural_logits = self.score_network(
             torch.cat((destination_states, source_states, edge_context, lag_context), dim=-1)
         ).squeeze(-1)
+        logits = neural_logits
         if self.lag_mode == "learned_lag" and self.prior_strength:
             logits = logits + self._travel_time_prior(edge_attr, lag_ids)[None, None]
 
-        attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
-        for node in destination.unique(sorted=True):
-            incoming = destination == node
-            incoming_count = int(incoming.sum())
-            candidates = available[:, incoming].reshape(output_window, -1)
-            node_logits = logits[:, :, incoming].reshape(batch, output_window, -1)
-            masked = node_logits.masked_fill(~candidates[None], -torch.inf)
-            has_candidate = candidates.any(dim=-1)
-            safe_logits = torch.where(
-                has_candidate[None, :, None], masked, torch.zeros_like(masked)
+        if self.lag_mode == "learned_lag":
+            lag_logits = logits.masked_fill(~available[None], -torch.inf)
+            lag_attention = torch.softmax(lag_logits.float(), dim=-1)
+            edge_attention = torch.zeros(
+                (batch, output_window, edge_count),
+                device=logits.device,
+                dtype=torch.float32,
             )
-            normalized = torch.softmax(safe_logits.float(), dim=-1)
-            normalized = normalized * candidates[None].to(normalized.dtype)
-            attention[:, :, incoming] = normalized.reshape(
-                batch, output_window, incoming_count, lag_count
-            )
+            for node in destination.unique(sorted=True):
+                incoming = destination == node
+                edge_attention[:, :, incoming] = torch.softmax(
+                    neural_logits[:, :, incoming, 0].float(), dim=-1
+                )
+            attention = edge_attention[..., None] * lag_attention
+        else:
+            attention = torch.zeros(logits.shape, device=logits.device, dtype=torch.float32)
+            for node in destination.unique(sorted=True):
+                incoming = destination == node
+                incoming_count = int(incoming.sum())
+                candidates = available[:, incoming].reshape(output_window, -1)
+                node_logits = logits[:, :, incoming].reshape(batch, output_window, -1)
+                masked = node_logits.masked_fill(~candidates[None], -torch.inf)
+                has_candidate = candidates.any(dim=-1)
+                safe_logits = torch.where(
+                    has_candidate[None, :, None], masked, torch.zeros_like(masked)
+                )
+                normalized = torch.softmax(safe_logits.float(), dim=-1)
+                normalized = normalized * candidates[None].to(normalized.dtype)
+                attention[:, :, incoming] = normalized.reshape(
+                    batch, output_window, incoming_count, lag_count
+                )
 
         messages = self.message_projection(source_states)
         if self.lag_mode == "learned_lag":
@@ -207,8 +251,18 @@ class DirectedLagAwareMessagePassing(nn.Module):
             ).to(messages.dtype)
             current_messages = messages[:, :, :, :1]
             messages = current_messages + lag_mix * (messages - current_messages)
-        message_weights = self.dropout(attention).to(messages.dtype)
-        edge_messages = (message_weights[..., None] * messages).sum(dim=3).to(h_seq.dtype)
+            lagged_messages = (
+                lag_attention.to(messages.dtype)[..., None] * messages
+            ).sum(dim=3)
+            edge_messages = (
+                self.dropout(edge_attention).to(messages.dtype)[..., None]
+                * lagged_messages
+            ).to(h_seq.dtype)
+        else:
+            message_weights = self.dropout(attention).to(messages.dtype)
+            edge_messages = (message_weights[..., None] * messages).sum(dim=3).to(
+                h_seq.dtype
+            )
         upstream = h_seq.new_zeros(batch, output_window, nodes, hidden)
         upstream.index_add_(2, destination, edge_messages)
         return upstream, attention
