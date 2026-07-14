@@ -230,8 +230,8 @@ def render_validation_markdown(summary: Mapping[str, object]) -> str:
                 (
                     "This concentration near zero makes `fixed_lag` structurally close to "
                     "`no_lag` and is a plausible explanation for the small validation deltas; "
-                    "it is a mechanism diagnostic, not a causal claim. Node coordinates are "
-                    "mapped-monitor centroids rather than river-line geometry."
+                    "it is a mechanism diagnostic, not a causal claim. The component-card "
+                    "layout is a schematic topology, not river-line geometry."
                 ),
                 "",
                 f"Machine-readable graph audit: [{graph_summary_path}]({graph_summary_path})",

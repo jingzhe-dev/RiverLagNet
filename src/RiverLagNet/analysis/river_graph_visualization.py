@@ -16,62 +16,70 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 from matplotlib.lines import Line2D
-from matplotlib.patches import FancyArrowPatch
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 
-# 可调参数：画布与导出
-FIGURE_SIZE = (13.0, 7.2)
+# 可调参数：画布、卡片与导出
+FIGURE_SIZE = (15.0, 7.8)
+FIGURE_WIDTH_PER_COLUMN = 3.0
+FIGURE_HEIGHT_PER_ROW = 3.9
 EXPORT_DPI = 300
-WIDTH_RATIOS = (1.35, 1.0)
-PANEL_WSPACE = 0.15
+CARD_ROWS = 2
+CARD_COLUMNS = 5
+CARD_LEFT = 0.035
+CARD_RIGHT = 0.985
+CARD_TOP = 0.855
+CARD_BOTTOM = 0.145
+CARD_WSPACE = 0.13
+CARD_HSPACE = 0.22
+CARD_FRAME_VISIBLE = True
+CARD_FRAME_COLOR = "#D7DDE1"
+CARD_FRAME_WIDTH = 0.8
+CARD_FACE_COLOR = "#FBFCFD"
+CARD_CORNER_RADIUS = 0.035
 
 # 可调参数：节点、箭头与标签
-BASE_NODE_SIZE = 34.0
-STATION_SIZE_STEP = 12.0
-MAX_NODE_SIZE = 110.0
-EDGE_LINE_WIDTH = 0.9
-ARROW_SCALE = 9.0
-ARROW_SHRINK = 5.5
-NODE_LABEL_DIGITS = 4
-NODE_LABEL_SIZE = 6.7
-COMPONENT_LABEL_SIZE = 8.0
-AXIS_LABEL_SIZE = 9.5
-TICK_LABEL_SIZE = 8.5
-PANEL_LABEL_SIZE = 11.0
-TOPOLOGY_BRANCH_SPREAD = 0.18
-TOPOLOGY_X_MIN = 0.20
-TOPOLOGY_X_MAX = 0.92
-COMPONENT_LABEL_OFFSETS = (
-    (-28, 10),
-    (25, 18),
-    (0, 15),
-    (0, 15),
-    (28, -8),
-    (-20, 14),
-    (16, 14),
-    (-12, 14),
-    (16, -10),
-    (0, 15),
-)
+NODE_SIZE = 510.0
+NODE_EDGE_WIDTH = 1.0
+NODE_COUNT_SIZE = 8.4
+NODE_LABEL_SIZE = 7.6
+COMPONENT_LABEL_SIZE = 10.0
+COMPONENT_META_SIZE = 7.5
+EDGE_LINE_WIDTH = 1.25
+ARROW_SCALE = 12.0
+ARROW_SHRINK = 16.0
+EDGE_LABEL_SIZE = 7.0
+TOPOLOGY_BRANCH_SPREAD = 0.17
+TOPOLOGY_X_MIN = 0.12
+TOPOLOGY_X_MAX = 0.88
+TOPOLOGY_Y_CENTER = 0.50
+NODE_LABEL_OFFSET = 0.125
+
+# 可调参数：标题、图例与方向标识
+TITLE_SIZE = 15.0
+SUBTITLE_SIZE = 9.2
+DIRECTION_LABEL_SIZE = 9.2
+LEGEND_SIZE = 8.3
+FOOTNOTE_SIZE = 8.0
 
 # 可调参数：学术配色
-COMPONENT_PALETTE = (
-    "#4E79A7",
-    "#D79A45",
-    "#5B8E7D",
-    "#8E6C8A",
-    "#7D8F5B",
-    "#B46A63",
-    "#5F8FA3",
-    "#A27C4C",
-    "#687A9A",
-    "#85706B",
-)
-PRIOR_COLORS = {0: "#7C8790", 1: "#D08B3E"}
+ROLE_COLORS = {
+    "headwater": "#D9E8F0",
+    "internal": "#7FA8BD",
+    "outlet": "#2F6482",
+    "isolated": "#C9D0D5",
+}
+ROLE_TEXT_COLORS = {
+    "headwater": "#24343C",
+    "internal": "#FFFFFF",
+    "outlet": "#FFFFFF",
+    "isolated": "#24343C",
+}
+PRIOR_COLORS = {0: "#8B969E", 1: "#D48835"}
 DEFAULT_EDGE_COLOR = "#B46A63"
 REVIEW_COLOR = "#B23A3A"
-GRID_COLOR = "#DCE0E3"
 TEXT_COLOR = "#252A2E"
+MUTED_TEXT_COLOR = "#667078"
 
 
 def _finite(value: Any, label: str) -> float:
@@ -296,290 +304,349 @@ def write_river_graph_summary(summary: Mapping[str, object], path: Path) -> None
         handle.write(json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
 
 
-def _node_size(count: int) -> float:
-    return min(BASE_NODE_SIZE + STATION_SIZE_STEP * (count - 1), MAX_NODE_SIZE)
-
-
-def _arrow(
-    axis: plt.Axes,
-    source: tuple[float, float],
-    destination: tuple[float, float],
-    color: str,
-    *,
-    shrink: float = ARROW_SHRINK,
-) -> None:
-    axis.add_patch(
-        FancyArrowPatch(
-            source,
-            destination,
-            arrowstyle="-|>",
-            mutation_scale=ARROW_SCALE,
-            linewidth=EDGE_LINE_WIDTH,
-            color=color,
-            shrinkA=shrink,
-            shrinkB=shrink,
-            connectionstyle="arc3,rad=0.025",
-            zorder=1,
+def _card_positions(
+    node_ids: list[str], edges: list[tuple[str, str]]
+) -> dict[str, tuple[float, float]]:
+    depths = _topological_depths(node_ids, edges)
+    max_depth = max(depths.values(), default=0)
+    positions: dict[str, tuple[float, float]] = {}
+    for depth in range(max_depth + 1):
+        level_nodes = sorted(node_id for node_id in node_ids if depths[node_id] == depth)
+        offsets = (
+            np.array([0.0])
+            if len(level_nodes) == 1
+            else np.linspace(-TOPOLOGY_BRANCH_SPREAD, TOPOLOGY_BRANCH_SPREAD, len(level_nodes))
         )
-    )
+        x_position = (
+            (TOPOLOGY_X_MIN + TOPOLOGY_X_MAX) / 2.0
+            if max_depth == 0
+            else TOPOLOGY_X_MIN
+            + (TOPOLOGY_X_MAX - TOPOLOGY_X_MIN) * depth / max_depth
+        )
+        for node_id, offset in zip(level_nodes, offsets, strict=True):
+            positions[node_id] = (x_position, TOPOLOGY_Y_CENTER + float(offset))
+    return positions
 
 
-def _component_colors(summary: Mapping[str, Any]) -> dict[str, str]:
-    components = summary["components"]
-    if not isinstance(components, list) or len(components) > len(COMPONENT_PALETTE):
-        raise ValueError("component palette does not cover the graph")
-    return {
-        str(component["component_id"]): COMPONENT_PALETTE[index]
-        for index, component in enumerate(components)
+def _component_card(
+    axis: plt.Axes,
+    component: Mapping[str, Any],
+    nodes: list[Mapping[str, Any]],
+    edges: list[Mapping[str, Any]],
+) -> None:
+    component_id = str(component["component_id"])
+    component_nodes = [node for node in nodes if node["component_id"] == component_id]
+    component_edges = [edge for edge in edges if edge["component_id"] == component_id]
+    node_ids = sorted(str(node["node_id"]) for node in component_nodes)
+    edge_pairs = [
+        (str(edge["src_station_id"]), str(edge["dst_station_id"]))
+        for edge in component_edges
+    ]
+    positions = _card_positions(node_ids, edge_pairs)
+    node_by_id = {str(node["node_id"]): node for node in component_nodes}
+    edge_by_pair = {
+        (str(edge["src_station_id"]), str(edge["dst_station_id"])): edge
+        for edge in component_edges
     }
 
+    frame = FancyBboxPatch(
+        (0.0, 0.0),
+        1.0,
+        1.0,
+        transform=axis.transAxes,
+        boxstyle=f"round,pad=0.012,rounding_size={CARD_CORNER_RADIUS}",
+        facecolor=CARD_FACE_COLOR,
+        edgecolor=CARD_FRAME_COLOR if CARD_FRAME_VISIBLE else "none",
+        linewidth=CARD_FRAME_WIDTH,
+        clip_on=False,
+        zorder=-5,
+    )
+    axis.add_patch(frame)
+    axis.text(
+        0.045,
+        0.915,
+        str(component["component_label"]),
+        transform=axis.transAxes,
+        fontsize=COMPONENT_LABEL_SIZE,
+        fontweight="bold",
+        color=TEXT_COLOR,
+        ha="left",
+        va="top",
+    )
+    axis.text(
+        0.955,
+        0.915,
+        f"{component['node_count']} segments · {component['edge_count']} edges",
+        transform=axis.transAxes,
+        fontsize=COMPONENT_META_SIZE,
+        color=MUTED_TEXT_COLOR,
+        ha="right",
+        va="top",
+    )
 
-def _geographic_panel(axis: plt.Axes, summary: Mapping[str, Any]) -> None:
-    nodes = summary["nodes"]
-    edges = summary["edges"]
-    assert isinstance(nodes, list) and isinstance(edges, list)
-    node_by_id = {str(node["node_id"]): node for node in nodes}
-    component_colors = _component_colors(summary)
-    for edge in edges:
-        source = node_by_id[str(edge["src_station_id"])]
-        destination = node_by_id[str(edge["dst_station_id"])]
+    for source, destination in edge_pairs:
+        edge = edge_by_pair[(source, destination)]
         lag = int(edge["rounded_prior_lag_days"])
-        _arrow(
-            axis,
-            (_finite(source["longitude"], "longitude"), _finite(source["latitude"], "latitude")),
-            (
-                _finite(destination["longitude"], "longitude"),
-                _finite(destination["latitude"], "latitude"),
-            ),
-            PRIOR_COLORS.get(lag, DEFAULT_EDGE_COLOR),
+        color = PRIOR_COLORS.get(lag, DEFAULT_EDGE_COLOR)
+        axis.add_patch(
+            FancyArrowPatch(
+                positions[source],
+                positions[destination],
+                arrowstyle="-|>",
+                mutation_scale=ARROW_SCALE,
+                linewidth=EDGE_LINE_WIDTH,
+                color=color,
+                shrinkA=ARROW_SHRINK,
+                shrinkB=ARROW_SHRINK,
+                connectionstyle="arc3,rad=0.0",
+                zorder=1,
+            )
         )
-    for node in nodes:
-        longitude = _finite(node["longitude"], "longitude")
-        latitude = _finite(node["latitude"], "latitude")
-        color = component_colors[str(node["component_id"])]
-        size = _node_size(int(node["source_station_count"]))
+        if lag != 0:
+            midpoint_x = (positions[source][0] + positions[destination][0]) / 2.0
+            midpoint_y = (positions[source][1] + positions[destination][1]) / 2.0
+            axis.text(
+                midpoint_x,
+                midpoint_y + 0.055,
+                f"{lag} d",
+                fontsize=EDGE_LABEL_SIZE,
+                color=color,
+                ha="center",
+                va="bottom",
+                bbox={"facecolor": CARD_FACE_COLOR, "edgecolor": "none", "pad": 0.5},
+                zorder=2,
+            )
+
+    for node_id in node_ids:
+        node = node_by_id[node_id]
+        x_position, y_position = positions[node_id]
+        role = str(node["role"])
+        facecolor = ROLE_COLORS.get(role, ROLE_COLORS["isolated"])
+        text_color = ROLE_TEXT_COLORS.get(role, ROLE_TEXT_COLORS["isolated"])
         axis.scatter(
-            [longitude],
-            [latitude],
-            s=size,
-            color=color,
+            [x_position],
+            [y_position],
+            s=NODE_SIZE,
+            facecolor=facecolor,
             edgecolor="white",
-            linewidth=0.7,
+            linewidth=NODE_EDGE_WIDTH,
             zorder=3,
         )
         if bool(node["mapping_review"]):
             axis.scatter(
-                [longitude],
-                [latitude],
-                s=size + 28,
+                [x_position],
+                [y_position],
+                s=NODE_SIZE + 170,
                 facecolor="none",
                 edgecolor=REVIEW_COLOR,
-                linewidth=1.2,
+                linewidth=1.4,
                 zorder=4,
             )
-    for component_index, component in enumerate(summary["components"]):
-        component_nodes = [
-            node for node in nodes if node["component_id"] == component["component_id"]
-        ]
-        longitude = float(np.mean([node["longitude"] for node in component_nodes]))
-        latitude = float(np.mean([node["latitude"] for node in component_nodes]))
-        offset = COMPONENT_LABEL_OFFSETS[component_index]
-        axis.annotate(
-            str(component["component_label"]),
-            xy=(longitude, latitude),
-            xytext=offset,
-            textcoords="offset points",
-            color=TEXT_COLOR,
-            fontsize=COMPONENT_LABEL_SIZE,
+        axis.text(
+            x_position,
+            y_position,
+            str(node["source_station_count"]),
+            fontsize=NODE_COUNT_SIZE,
             fontweight="bold",
+            color=text_color,
             ha="center",
             va="center",
-            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.72, "pad": 0.8},
-            arrowprops={
-                "arrowstyle": "-",
-                "color": component_colors[str(component["component_id"])],
-                "lw": 0.65,
-                "shrinkA": 1.5,
-                "shrinkB": 2.0,
-            },
             zorder=5,
         )
-    latitudes = [float(node["latitude"]) for node in nodes]
-    axis.set_aspect(1.0 / math.cos(math.radians(float(np.mean(latitudes)))))
-    axis.set_xlabel("Longitude (°E)", fontsize=AXIS_LABEL_SIZE)
-    axis.set_ylabel("Latitude (°N)", fontsize=AXIS_LABEL_SIZE)
-    axis.tick_params(labelsize=TICK_LABEL_SIZE, width=0.7, length=3)
-    axis.grid(color=GRID_COLOR, linewidth=0.55, alpha=0.75, zorder=0)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    axis.text(
-        -0.08,
-        1.02,
-        "a",
-        transform=axis.transAxes,
-        fontsize=PANEL_LABEL_SIZE,
-        fontweight="bold",
-    )
-    legend_handles = [
-        Line2D([0], [0], color=PRIOR_COLORS[0], lw=1.4, marker=">", markevery=[1], label="Prior lag 0 d"),
-        Line2D([0], [0], color=PRIOR_COLORS[1], lw=1.4, marker=">", markevery=[1], label="Prior lag 1 d"),
+        display_id = f"{node_id}{'*' if bool(node['mapping_review']) else ''}"
+        axis.text(
+            x_position,
+            y_position - NODE_LABEL_OFFSET,
+            display_id,
+            fontsize=NODE_LABEL_SIZE,
+            color=REVIEW_COLOR if bool(node["mapping_review"]) else TEXT_COLOR,
+            ha="center",
+            va="top",
+            zorder=5,
+        )
+    axis.set_xlim(0.0, 1.0)
+    axis.set_ylim(0.0, 1.0)
+    axis.axis("off")
+
+
+def _network_legend_handles() -> list[Line2D]:
+    return [
         Line2D(
             [0],
             [0],
             marker="o",
-            color="none",
-            markerfacecolor="white",
+            linestyle="none",
+            markerfacecolor=ROLE_COLORS["headwater"],
+            markeredgecolor="white",
+            markersize=9,
+            label="Headwater",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markerfacecolor=ROLE_COLORS["internal"],
+            markeredgecolor="white",
+            markersize=9,
+            label="Internal",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markerfacecolor=ROLE_COLORS["outlet"],
+            markeredgecolor="white",
+            markersize=9,
+            label="Outlet",
+        ),
+        Line2D([0], [0], color=PRIOR_COLORS[0], lw=1.8, label="0-day prior"),
+        Line2D([0], [0], color=PRIOR_COLORS[1], lw=1.8, label="1-day prior"),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="none",
+            markerfacecolor="none",
             markeredgecolor=REVIEW_COLOR,
+            markersize=9,
             label="Mapping review",
         ),
     ]
-    axis.legend(
-        handles=legend_handles,
-        loc="lower left",
-        frameon=False,
-        fontsize=TICK_LABEL_SIZE,
-        ncol=3,
-        bbox_to_anchor=(0.0, -0.15),
-    )
-
-
-def _topology_panel(axis: plt.Axes, summary: Mapping[str, Any]) -> None:
-    nodes = summary["nodes"]
-    edges = summary["edges"]
-    components = summary["components"]
-    assert isinstance(nodes, list) and isinstance(edges, list) and isinstance(components, list)
-    node_by_id = {str(node["node_id"]): node for node in nodes}
-    component_colors = _component_colors(summary)
-    for row_index, component in enumerate(components):
-        row = len(components) - 1 - row_index
-        component_id = str(component["component_id"])
-        component_nodes = sorted(
-            str(node["node_id"]) for node in nodes if node["component_id"] == component_id
-        )
-        component_edges = [
-            (str(edge["src_station_id"]), str(edge["dst_station_id"]))
-            for edge in edges
-            if edge["component_id"] == component_id
-        ]
-        depths = _topological_depths(component_nodes, component_edges)
-        max_depth = max(depths.values(), default=0)
-        positions: dict[str, tuple[float, float]] = {}
-        for depth in range(max_depth + 1):
-            level_nodes = sorted(node for node in component_nodes if depths[node] == depth)
-            offsets = np.linspace(
-                -TOPOLOGY_BRANCH_SPREAD,
-                TOPOLOGY_BRANCH_SPREAD,
-                len(level_nodes),
-            )
-            x_position = (
-                TOPOLOGY_X_MIN
-                if max_depth == 0
-                else TOPOLOGY_X_MIN
-                + (TOPOLOGY_X_MAX - TOPOLOGY_X_MIN) * depth / max_depth
-            )
-            for node_id, offset in zip(level_nodes, offsets, strict=True):
-                positions[node_id] = (x_position, row + float(offset))
-        edge_lookup = {
-            (str(edge["src_station_id"]), str(edge["dst_station_id"])): edge
-            for edge in edges
-            if edge["component_id"] == component_id
-        }
-        for source, destination in component_edges:
-            lag = int(edge_lookup[(source, destination)]["rounded_prior_lag_days"])
-            _arrow(
-                axis,
-                positions[source],
-                positions[destination],
-                PRIOR_COLORS.get(lag, DEFAULT_EDGE_COLOR),
-                shrink=4.5,
-            )
-        for node_id in component_nodes:
-            node = node_by_id[node_id]
-            x_position, y_position = positions[node_id]
-            axis.scatter(
-                [x_position],
-                [y_position],
-                s=_node_size(int(node["source_station_count"])) * 0.72,
-                color=component_colors[component_id],
-                edgecolor="white",
-                linewidth=0.6,
-                zorder=3,
-            )
-            if bool(node["mapping_review"]):
-                axis.scatter(
-                    [x_position],
-                    [y_position],
-                    s=_node_size(int(node["source_station_count"])) * 0.72 + 22,
-                    facecolor="none",
-                    edgecolor=REVIEW_COLOR,
-                    linewidth=1.0,
-                    zorder=4,
-                )
-            axis.text(
-                x_position,
-                y_position + 0.24,
-                node_id[-NODE_LABEL_DIGITS:],
-                ha="center",
-                va="bottom",
-                fontsize=NODE_LABEL_SIZE,
-                color=TEXT_COLOR,
-            )
-        axis.text(
-            0.03,
-            row,
-            str(component["component_label"]),
-            ha="left",
-            va="center",
-            fontsize=COMPONENT_LABEL_SIZE,
-            fontweight="bold",
-            color=component_colors[component_id],
-        )
-    axis.set_xlim(0.0, 1.0)
-    axis.set_ylim(-0.55, len(components) - 0.25)
-    axis.axis("off")
-    axis.annotate(
-        "",
-        xy=(TOPOLOGY_X_MAX, 1.03),
-        xytext=(TOPOLOGY_X_MIN, 1.03),
-        xycoords="axes fraction",
-        arrowprops={"arrowstyle": "-|>", "color": TEXT_COLOR, "lw": 0.8},
-    )
-    axis.text(TOPOLOGY_X_MIN, 1.055, "Upstream", transform=axis.transAxes, ha="center", fontsize=AXIS_LABEL_SIZE)
-    axis.text(TOPOLOGY_X_MAX, 1.055, "Downstream", transform=axis.transAxes, ha="center", fontsize=AXIS_LABEL_SIZE)
-    axis.text(
-        -0.02,
-        1.02,
-        "b",
-        transform=axis.transAxes,
-        fontsize=PANEL_LABEL_SIZE,
-        fontweight="bold",
-    )
 
 
 def render_river_graph_figure(
     summary: Mapping[str, Any], png_path: Path, pdf_path: Path
 ) -> tuple[Path, Path]:
-    """Render geographic and topology panels for upstream-downstream evidence."""
+    """Render each directed river component as an intuitive upstream-flow card."""
     if summary.get("direction") != "upstream_to_downstream":
         raise ValueError("graph direction must be upstream_to_downstream")
+    nodes = summary.get("nodes")
+    edges = summary.get("edges")
+    components = summary.get("components")
+    if not isinstance(nodes, list) or not isinstance(edges, list) or not isinstance(components, list):
+        raise ValueError("graph summary nodes, edges, and components are required")
+    if not components:
+        raise ValueError("graph summary must contain at least one component")
     plt.rcParams.update(
         {
             "font.family": "DejaVu Sans",
-            "font.size": TICK_LABEL_SIZE,
-            "axes.labelcolor": TEXT_COLOR,
-            "xtick.color": TEXT_COLOR,
-            "ytick.color": TEXT_COLOR,
+            "font.size": LEGEND_SIZE,
+            "text.color": TEXT_COLOR,
         }
     )
-    figure, axes = plt.subplots(
-        1,
-        2,
-        figsize=FIGURE_SIZE,
-        gridspec_kw={"width_ratios": WIDTH_RATIOS},
+    card_columns = min(CARD_COLUMNS, len(components))
+    card_rows = math.ceil(len(components) / card_columns)
+    figure_size = (
+        FIGURE_SIZE[0]
+        if card_columns == CARD_COLUMNS
+        else FIGURE_WIDTH_PER_COLUMN * card_columns,
+        FIGURE_SIZE[1]
+        if card_rows == CARD_ROWS
+        else FIGURE_HEIGHT_PER_ROW * card_rows,
     )
-    _geographic_panel(axes[0], summary)
-    _topology_panel(axes[1], summary)
-    figure.subplots_adjust(wspace=PANEL_WSPACE)
+    figure, axes = plt.subplots(
+        card_rows,
+        card_columns,
+        figsize=figure_size,
+        squeeze=False,
+    )
+    for axis, component in zip(axes.flat, components, strict=False):
+        _component_card(axis, component, nodes, edges)
+    for axis in axes.flat[len(components) :]:
+        axis.axis("off")
+    figure.subplots_adjust(
+        left=CARD_LEFT,
+        right=CARD_RIGHT,
+        top=CARD_TOP,
+        bottom=CARD_BOTTOM,
+        wspace=CARD_WSPACE,
+        hspace=CARD_HSPACE,
+    )
+    figure.text(
+        CARD_LEFT,
+        0.958,
+        "Directed monitored river network",
+        fontsize=TITLE_SIZE,
+        fontweight="bold",
+        ha="left",
+        va="top",
+        color=TEXT_COLOR,
+    )
+    figure.text(
+        CARD_LEFT,
+        0.920,
+        "Each card is one disjoint component; arrows show the modelled information-flow direction.",
+        fontsize=SUBTITLE_SIZE,
+        ha="left",
+        va="top",
+        color=MUTED_TEXT_COLOR,
+    )
+    figure.add_artist(
+        FancyArrowPatch(
+            (0.735, 0.931),
+            (0.890, 0.931),
+            transform=figure.transFigure,
+            arrowstyle="-|>",
+            mutation_scale=13,
+            linewidth=1.0,
+            color=TEXT_COLOR,
+        )
+    )
+    figure.text(
+        0.720,
+        0.931,
+        "UPSTREAM",
+        fontsize=DIRECTION_LABEL_SIZE,
+        fontweight="bold",
+        ha="right",
+        va="center",
+    )
+    figure.text(
+        0.905,
+        0.931,
+        "DOWNSTREAM",
+        fontsize=DIRECTION_LABEL_SIZE,
+        fontweight="bold",
+        ha="left",
+        va="center",
+    )
+    figure.legend(
+        handles=_network_legend_handles(),
+        loc="lower left",
+        bbox_to_anchor=(CARD_LEFT, 0.025),
+        ncol=6,
+        frameon=False,
+        fontsize=LEGEND_SIZE,
+        handlelength=2.0,
+        columnspacing=1.3,
+    )
+    figure.text(
+        CARD_LEFT,
+        0.105,
+        "Number inside node = mapped source stations · label below node = HydroRIVERS segment ID · * = mapping review",
+        fontsize=FOOTNOTE_SIZE,
+        ha="left",
+        va="center",
+        color=MUTED_TEXT_COLOR,
+    )
+    prior_counts = summary.get("rounded_prior_lag_counts")
+    if not isinstance(prior_counts, Mapping):
+        raise ValueError("rounded prior-lag counts are required")
+    figure.text(
+        CARD_RIGHT,
+        0.105,
+        (
+            f"{summary['node_count']} segments  |  {summary['edge_count']} directed edges  |  "
+            f"prior lag: {prior_counts.get('0', 0)} × 0 d, {prior_counts.get('1', 0)} × 1 d"
+        ),
+        fontsize=FOOTNOTE_SIZE,
+        fontweight="bold",
+        ha="right",
+        va="center",
+        color=TEXT_COLOR,
+    )
     png_path = Path(png_path)
     pdf_path = Path(pdf_path)
     png_path.parent.mkdir(parents=True, exist_ok=True)

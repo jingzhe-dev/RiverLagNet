@@ -14,7 +14,7 @@ This report is generated from validation-selected checkpoints trained on real-so
 
 The audited graph contains 36 monitored segments, 26 upstream-to-downstream edges, and 10 disjoint components. Rounded travel-time priors comprise 23 edges at 0 d, 3 edges at 1 d.
 
-This concentration near zero makes `fixed_lag` structurally close to `no_lag` and is a plausible explanation for the small validation deltas; it is a mechanism diagnostic, not a causal claim. Node coordinates are mapped-monitor centroids rather than river-line geometry.
+This concentration near zero makes `fixed_lag` structurally close to `no_lag` and is a plausible explanation for the small validation deltas; it is a mechanism diagnostic, not a causal claim. The component-card layout is a schematic topology, not river-line geometry.
 
 Machine-readable graph audit: [../experiments/china_real_daily_graph_summary.json](../experiments/china_real_daily_graph_summary.json)
 
