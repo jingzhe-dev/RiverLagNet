@@ -11,6 +11,7 @@ from .dataset import RiverWindowDataset, river_collate
 from .normalization import MaskedStandardScaler
 from .real_daily import load_real_daily_dataset
 from .schema import TimeSeriesData
+from .splits import select_v02_fold
 from .synthetic import generate_synthetic_river_data
 from .synthetic_identifiable import (
     SyntheticScenario,
@@ -30,7 +31,7 @@ class DataSpec:
 
 
 class RiverDataModule(LightningDataModule):
-    """Create deterministic 70/15/15 chronological synthetic or real splits."""
+    """Create deterministic legacy or sealed v0.2 chronological splits."""
 
     def __init__(
         self,
@@ -46,6 +47,7 @@ class RiverDataModule(LightningDataModule):
         seed: int = 42,
         scenario: str = "legacy",
         dataset_path: str | None = None,
+        split_name: str = "legacy",
     ) -> None:
         super().__init__()
         if scenario not in {"legacy", "identifiable_v1", "real_daily"}:
@@ -58,9 +60,10 @@ class RiverDataModule(LightningDataModule):
         self.scaler: MaskedStandardScaler | None = None
         self.train_dataset: RiverWindowDataset
         self.val_dataset: RiverWindowDataset
-        self.test_dataset: RiverWindowDataset
+        self.test_dataset: RiverWindowDataset | None = None
         self.train_end = int(num_days * 0.70)
         self.val_end = int(num_days * 0.85)
+        self.final_test_start = self.val_end
 
     def setup(self, stage: str | None = None) -> None:
         """Generate data once, fit train-only statistics, and build split windows."""
@@ -85,8 +88,15 @@ class RiverDataModule(LightningDataModule):
                     seed=self.hparams.seed,
                 )
             num_days = self.data.values.shape[0]
-            self.train_end = int(num_days * 0.70)
-            self.val_end = int(num_days * 0.85)
+            if self.hparams.split_name == "legacy":
+                self.train_end = int(num_days * 0.70)
+                self.val_end = int(num_days * 0.85)
+                self.final_test_start = self.val_end
+            else:
+                fold = select_v02_fold(self.hparams.split_name, num_days)
+                self.train_end = fold.train[1]
+                self.val_end = fold.validation[1]
+                self.final_test_start = fold.final_test[0]
             self.scaler = MaskedStandardScaler().fit(
                 self.data.values[: self.train_end], self.data.observed[: self.train_end]
             )
@@ -107,14 +117,17 @@ class RiverDataModule(LightningDataModule):
             self.hparams.input_window,
             self.hparams.output_window,
         )
-        self.test_dataset = RiverWindowDataset(
-            self.data,
-            self.scaler,
-            self.val_end,
-            self.data.values.shape[0],
-            self.hparams.input_window,
-            self.hparams.output_window,
-        )
+        if self.hparams.split_name == "legacy":
+            self.test_dataset = RiverWindowDataset(
+                self.data,
+                self.scaler,
+                self.val_end,
+                self.data.values.shape[0],
+                self.hparams.input_window,
+                self.hparams.output_window,
+            )
+        else:
+            self.test_dataset = None
 
     @property
     def data_spec(self) -> DataSpec:
@@ -135,6 +148,8 @@ class RiverDataModule(LightningDataModule):
         return self._loader(self.val_dataset, shuffle=False)
 
     def test_dataloader(self) -> DataLoader:
+        if self.test_dataset is None:
+            raise RuntimeError("final test is locked until Session D")
         return self._loader(self.test_dataset, shuffle=False)
 
     def _loader(self, dataset: RiverWindowDataset, shuffle: bool) -> DataLoader:

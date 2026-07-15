@@ -1,0 +1,11 @@
+scenario: real_daily
+dataset_path: data/processed/china-real-daily-contracted-1068-extended-v0.4/dataset.npz
+split_name: v02_fold_a
+input_window: 180
+output_window: 30
+batch_size: 8
+num_workers: 4
+pin_memory: true
+persistent_workers: true
+prefetch_factor: 2
+seed: ${seed}

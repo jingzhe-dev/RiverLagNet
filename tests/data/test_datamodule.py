@@ -7,6 +7,49 @@ from hydra import compose, initialize_config_dir
 from RiverLagNet.data.datamodule import RiverDataModule
 
 
+@pytest.mark.parametrize(
+    ("split_name", "train_end", "validation_end"),
+    [
+        ("v02_fold_a", 132, 156),
+        ("v02_fold_b", 156, 180),
+        ("v02_fold_c", 180, 204),
+    ],
+)
+def test_v02_fold_windows_and_scaler_are_development_only(
+    split_name: str, train_end: int, validation_end: int
+) -> None:
+    module = RiverDataModule(
+        num_days=240,
+        num_nodes=5,
+        input_window=20,
+        output_window=10,
+        batch_size=4,
+        split_name=split_name,
+        seed=5,
+    )
+
+    module.setup("fit")
+
+    assert module.data is not None and module.scaler is not None
+    assert module.train_end == train_end
+    assert module.val_end == validation_end
+    assert module.final_test_start == 204
+    train_targets = set(module.train_dataset.all_target_indices())
+    validation_targets = set(module.val_dataset.all_target_indices())
+    assert train_targets.isdisjoint(validation_targets)
+    assert max(train_targets) < train_end
+    assert min(validation_targets) == train_end
+    assert max(validation_targets) < validation_end <= module.final_test_start
+    expected = []
+    for feature in range(module.data.values.shape[-1]):
+        values = module.data.values[:train_end, :, feature]
+        mask = module.data.observed[:train_end, :, feature]
+        expected.append(values[mask].mean())
+    assert torch.allclose(module.scaler.mean, torch.stack(expected))
+    with pytest.raises(RuntimeError, match="final test is locked until Session D"):
+        module.test_dataloader()
+
+
 def test_datamodule_fits_scaler_on_training_period_and_collates_shared_graph() -> None:
     module = RiverDataModule(
         num_days=180,
