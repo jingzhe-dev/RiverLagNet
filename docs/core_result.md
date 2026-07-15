@@ -2,9 +2,9 @@
 
 ## 一句话结论
 
-真实日尺度数据表明，有向上游河网信息可以带来正的验证集增益，但当前可部署模型远未达到 15%：全 1068 站任务相对同预算无图模型仅提升 **0.09%**，在不读取水质结果而由拓扑预定义的 61 站连续主干上，最佳 8 跳 RiverLagNet 提升 **1.56%**。新的 CrossFormer 受控实验进一步量化出：直接边 attention 提升 **0.49%**，多尺度祖先路径 attention 提升到 **0.79%**，说明 attention 创新有效但幅度仍小。
+真实日尺度数据表明，有向上游河网信息可以带来正的验证集增益，但当前可部署模型远未达到 15%。在不读取水质结果、仅由拓扑预定义的 61 站连续主干上，当前最高验证分数由 RCELA + GMRF 获得：macro NSE 从同预算无图的 **0.589238** 提高到 **0.595144**，相对提升 **1.002%**，只完成 15% 目标的 **6.7%**。固定 innovation 使增益转负，自适应双分量 DCUV 恢复到 **+0.535%**，但仍未超过绝对状态 attention。
 
-![河网信息 15% NSE 增益诊断](figures/graph_15pct_diagnostic_v2.png)
+![河网信息 15% NSE 增益与上下游递归传播](figures/graph_15pct_diagnostic_v3.png)
 
 这量化的是河网信息的增量预测价值，不是 attention 的因果效应，也不是污染物真实因果传播量。
 
@@ -13,7 +13,7 @@
 | 范围 / 方法 | 无图 macro NSE | 加图 macro NSE | 相对提升 | 结论 |
 |---|---:|---:|---:|---|
 | 1068 站全网，扩展输入，8 跳轨迹传播 | 0.56350 | 0.56401 | +0.09% | 未达 15% |
-| 61 站主干，8 跳隐状态轨迹传播 | 0.58394 | 0.59303 | +1.56% | 当前最佳可部署候选，未达 15% |
+| 61 站主干，8 跳隐状态轨迹传播 | 0.58394 | 0.59303 | +1.56% | 旧架构最高相对增益，未达 15% |
 | 61 站主干，显式时滞输出输送 | 0.58394 | 0.58331 | −0.11% | 丢弃 |
 | 61 站 CrossFormer，直接边 ELHSA + TGCF | 0.58420 | 0.58706 | +0.49% | 被多尺度 attention 取代 |
 | 61 站 CrossFormer，MAP-LHSA + TGCF | 0.58420 | 0.58882 | +0.79% | 保留 attention 创新，未达 15% |
@@ -62,10 +62,13 @@
 
 固定把 attention value 改成 `upstream_state - downstream_local_state` 的纯 innovation 消融得到验证 macro NSE `0.587909`，相对同预算无图下降 `0.226%`，且低于绝对状态 RCELA + GMRF 的 `0.595144`。该版本因此 discard：共同背景确实需要抑制，但上游绝对水质水平也包含有效信息，不能被固定差分完全删除。后续只测试零起点的绝对状态/创新量自适应组合，不再保留纯 innovation 为默认模型。
 
+零起点 Dual-Component Upstream Values（DCUV）保留绝对状态投影，并学习额外的 `upstream_state - downstream_local_state` 投影。正式验证 macro NSE 为 `0.592391`，相对无图提升 `0.535%`，优于固定 innovation，但低于绝对状态 RCELA 的 `0.595144`，因此同样 discard。DCUV 对 NH3N、CODMn、TP 的 NSE 变化分别为 `+0.008124`、`+0.004953`、`-0.003618`；训练期拟合的全局最优图修正缩放仅为 `0.536`，表明自适应通道仍产生偏强修正，并且损害了 TP。测试集仍未使用。
+
 ## 可复现产物
 
 - 完整诊断：[graph_15pct_diagnostic_2026-07-14.md](graph_15pct_diagnostic_2026-07-14.md)
 - 审计数值：`experiments/graph_15pct_diagnostic.json`
-- 正式图：`docs/figures/graph_15pct_diagnostic_v2.png` / `.pdf`
+- DCUV 配对误差诊断：`experiments/mainstem_dcuv_error_diagnostic_v33.json`
+- 正式图：`docs/figures/graph_15pct_diagnostic_v3.png` / `.pdf`
 - 绘图入口：`python -m RiverLagNet.analysis.plot_graph_15pct_diagnostic`
 - 原始实验账本：`experiments/results.tsv`

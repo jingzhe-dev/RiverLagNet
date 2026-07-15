@@ -71,6 +71,46 @@
       }
     ]
   },
+  "recurrent_crossformer": {
+    "dataset_id": "china-real-daily-mainstem-61-extended-v0.1",
+    "no_graph_experiment": "realmain61ext_rcela_v30_s42_no_graph",
+    "no_graph_macro_nse": 0.5892375707626343,
+    "target_relative_gain_percent": 15.0,
+    "target_macro_nse": 0.6776232063770293,
+    "models": [
+      {
+        "name": "RCELA + GMRF absolute state",
+        "experiment": "realmain61ext_rcela_v30_s42_directed",
+        "macro_nse": 0.5951439738273621,
+        "relative_gain_percent": 1.0023805944830173,
+        "decision": "keep_current_best",
+        "target_delta_nse": {
+          "NH3N": 0.011659681797027588,
+          "CODMn": 0.005664706230163574,
+          "TP": 0.0003949403762817383
+        }
+      },
+      {
+        "name": "RCELA + GMRF fixed innovation",
+        "experiment": "realmain61ext_rcela_v32_innovation_s42_directed",
+        "macro_nse": 0.5879088044166565,
+        "relative_gain_percent": -0.22550604576317101,
+        "decision": "discard"
+      },
+      {
+        "name": "RCELA + GMRF adaptive DCUV",
+        "experiment": "realmain61ext_rcela_v33_adaptive_s42_directed",
+        "macro_nse": 0.5923906564712524,
+        "relative_gain_percent": 0.5351128076468733,
+        "decision": "discard_below_absolute_state",
+        "target_delta_nse": {
+          "NH3N": 0.008123993873596191,
+          "CODMn": 0.004953145980834961,
+          "TP": -0.0036177635192871094
+        }
+      }
+    ]
+  },
   "signal_diagnostics": {
     "deployable_train_fit_validation_eval": {
       "method": "per-node, horizon, and target ridge correction from travel-time-aligned upstream history or upstream local forecasts; fit on chronological training windows and evaluated on validation windows",

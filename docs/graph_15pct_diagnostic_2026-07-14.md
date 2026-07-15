@@ -4,7 +4,7 @@
 
 目前真实日尺度数据不支持“加入河网信息后，验证集 macro NSE 相对无图模型提升至少 15%”这一结论。最佳可部署 RiverLagNet 候选在拓扑预定义的 61 站连续主干上提升 **1.56%**；全 1068 站扩展输入任务只提升 **0.09%**。
 
-![15% 增益诊断](figures/graph_15pct_diagnostic_v2.png)
+![15% 增益诊断](figures/graph_15pct_diagnostic_v3.png)
 
 ## 受控结果
 

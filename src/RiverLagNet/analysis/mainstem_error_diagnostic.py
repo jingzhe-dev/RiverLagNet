@@ -30,6 +30,7 @@ def _restore_module(
     *,
     graph: bool,
     architecture: str = "trajectory",
+    attention_value_mode: str = "state",
 ) -> RiverForecastModule:
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     state_dict = payload.get("state_dict")
@@ -56,6 +57,7 @@ def _restore_module(
             dropout=0.1,
             lag_prior_scale_days=2.0,
             max_dynamic_shift_days=2.0,
+            attention_value_mode=(attention_value_mode if graph else "state"),
         )
     elif architecture != "trajectory":
         raise ValueError(f"unsupported diagnostic architecture: {architecture}")
@@ -306,6 +308,7 @@ def build_diagnostic(
     *,
     device: str | None = None,
     architecture: str = "trajectory",
+    attention_value_mode: str = "state",
 ) -> dict[str, Any]:
     """Build a validation-only graph-error diagnostic."""
     datamodule = RiverDataModule(
@@ -333,6 +336,7 @@ def build_diagnostic(
         graph_checkpoint,
         graph=True,
         architecture=architecture,
+        attention_value_mode=attention_value_mode,
     )
     train = _paired_predictions(
         baseline, graph, datamodule.train_dataloader(), selected_device
@@ -354,6 +358,7 @@ def build_diagnostic(
         "split_used": ["train_fit", "validation_evaluation"],
         "held_out_test_opened": False,
         "architecture": architecture,
+        "attention_value_mode": attention_value_mode,
         "dataset_path": str(dataset_path),
         "baseline_checkpoint": str(baseline_checkpoint),
         "graph_checkpoint": str(graph_checkpoint),
@@ -391,6 +396,11 @@ def main() -> None:
         choices=("trajectory", "recurrent_crossformer"),
         default="trajectory",
     )
+    parser.add_argument(
+        "--attention-value-mode",
+        choices=("state", "innovation", "adaptive"),
+        default="state",
+    )
     args = parser.parse_args()
     result = build_diagnostic(
         args.dataset,
@@ -398,6 +408,7 @@ def main() -> None:
         args.graph_checkpoint,
         device=args.device,
         architecture=args.architecture,
+        attention_value_mode=args.attention_value_mode,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
