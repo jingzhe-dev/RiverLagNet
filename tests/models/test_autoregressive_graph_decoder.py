@@ -161,6 +161,58 @@ def test_adaptive_values_learn_absolute_and_relative_components() -> None:
     assert torch.equal(values, expected)
 
 
+def test_hydrology_scaling_zero_starts_at_static_travel_time() -> None:
+    attention = RecursiveCausalEdgeLagAttention(
+        hidden_dim=4,
+        edge_dim=2,
+        num_heads=2,
+        max_lag=3,
+        max_path_hops=2,
+        travel_time_mode="hydrology_scale",
+        max_speed_ratio=4.0,
+    )
+    candidates = torch.randn(2, 3, 3, 4)
+    query = torch.randn(2, 4, 4)
+    destination = torch.tensor([1, 2, 3])
+    travel_time = torch.tensor([2.0, 5.0, 8.0])
+    shift = torch.zeros(2, 4, 2)
+
+    centers = attention._travel_time_centers(
+        candidates, query, destination, travel_time, shift
+    )
+
+    expected = travel_time[None, :, None, None].expand(2, 3, 3, 2)
+    assert torch.equal(centers, expected)
+
+
+def test_hydrology_scaling_converts_state_to_speed_ratio() -> None:
+    attention = RecursiveCausalEdgeLagAttention(
+        hidden_dim=4,
+        edge_dim=2,
+        num_heads=2,
+        max_lag=3,
+        max_path_hops=2,
+        travel_time_mode="hydrology_scale",
+        max_speed_ratio=4.0,
+    )
+    candidates = torch.zeros(1, 1, 3, 4)
+    candidates[..., 0] = 1.0
+    query = torch.zeros(1, 1, 4)
+    destination = torch.tensor([0])
+    travel_time = torch.tensor([8.0])
+    shift = torch.zeros(1, 1, 2)
+    assert attention.source_log_speed_weight is not None
+    with torch.no_grad():
+        attention.source_log_speed_weight[0, 0] = 1.0
+
+    centers = attention._travel_time_centers(
+        candidates, query, destination, travel_time, shift
+    )
+
+    assert torch.all(centers[..., 0] < 8.0)
+    assert torch.equal(centers[..., 1], torch.full_like(centers[..., 1], 8.0))
+
+
 def _decoder() -> DirectedAutoregressiveGraphDecoder:
     return DirectedAutoregressiveGraphDecoder(
         hidden_dim=8,

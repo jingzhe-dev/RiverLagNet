@@ -76,6 +76,8 @@ class RiverGraphCrossFormer(nn.Module):
         max_dynamic_shift_days: float = 2.0,
         attention_value_mode: str = "state",
         counterfactual_output_fusion: bool = False,
+        travel_time_mode: str = "shift",
+        max_speed_ratio: float = 4.0,
         **_: object,
     ) -> None:
         super().__init__()
@@ -138,6 +140,8 @@ class RiverGraphCrossFormer(nn.Module):
                 max_dynamic_shift_days=max_dynamic_shift_days,
                 attention_value_mode=attention_value_mode,
                 counterfactual_output_fusion=counterfactual_output_fusion,
+                travel_time_mode=travel_time_mode,
+                max_speed_ratio=max_speed_ratio,
             )
             if fusion_mode == "recurrent"
             else None

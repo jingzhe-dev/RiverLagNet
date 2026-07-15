@@ -51,6 +51,14 @@ bounded target-by-horizon gate blends only their prediction difference. This
 lets TP or unstable long-lead corrections reject graph information without
 removing useful NH3N/CODMn transport signals.
 
+`model=river_crossformer_recurrent_dynamic_travel` implements
+**Hydrology-conditioned travel-time scaling (HCTS)**. It converts causally
+available upstream and destination hidden states into a bounded multiplicative
+speed ratio, then rescales each edge-path travel-time prior before discrete-lag
+attention. The speed projections are zero-initialized, so the candidate starts
+exactly from the static-prior RCELA model. Learned routing weights and speed
+ratios are predictive parameters, not causal or physical velocity estimates.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

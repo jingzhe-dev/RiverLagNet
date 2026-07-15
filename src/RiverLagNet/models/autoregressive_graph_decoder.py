@@ -36,6 +36,8 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         prior_scale_days: float = 2.0,
         max_dynamic_shift_days: float = 2.0,
         value_mode: str = "state",
+        travel_time_mode: str = "shift",
+        max_speed_ratio: float = 4.0,
     ) -> None:
         super().__init__()
         if hidden_dim <= 0 or hidden_dim % num_heads:
@@ -46,6 +48,10 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
             raise ValueError("prior scale must be positive and dynamic shift non-negative")
         if value_mode not in {"state", "innovation", "adaptive"}:
             raise ValueError("value_mode must be state, innovation, or adaptive")
+        if travel_time_mode not in {"shift", "hydrology_scale"}:
+            raise ValueError("travel_time_mode must be shift or hydrology_scale")
+        if max_speed_ratio < 1.0:
+            raise ValueError("max_speed_ratio must be at least one")
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.head_dim = hidden_dim // num_heads
@@ -53,6 +59,8 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         self.max_path_hops = max_path_hops
         self.max_dynamic_shift_days = max_dynamic_shift_days
         self.value_mode = value_mode
+        self.travel_time_mode = travel_time_mode
+        self.max_log_speed_ratio = math.log(max_speed_ratio)
 
         self.query_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
@@ -65,6 +73,16 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         self.edge_key = nn.Linear(edge_dim, hidden_dim, bias=False)
         self.edge_bias = nn.Linear(edge_dim, num_heads, bias=False)
         self.lag_shift = nn.Linear(hidden_dim, num_heads, bias=False)
+        self.source_log_speed_weight = (
+            nn.Parameter(torch.zeros(num_heads, hidden_dim))
+            if travel_time_mode == "hydrology_scale"
+            else None
+        )
+        self.destination_log_speed_weight = (
+            nn.Parameter(torch.zeros(num_heads, hidden_dim))
+            if travel_time_mode == "hydrology_scale"
+            else None
+        )
         self.lag_embedding = nn.Parameter(
             torch.empty(max_lag, num_heads, self.head_dim)
         )
@@ -158,7 +176,13 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
             self.lag_shift(destination_query)
         )
         travel_time = edge_attr[:, -1].to(scores.dtype)
-        center = travel_time[None, :, None] + query_shift[:, destination]
+        center = self._travel_time_centers(
+            candidate_states,
+            destination_query,
+            destination,
+            travel_time,
+            query_shift,
+        )
         lag_days = torch.arange(
             1,
             self.max_lag + 1,
@@ -167,7 +191,7 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         )
         prior_scale = F.softplus(self.prior_raw_scale).to(scores.dtype) + 0.25
         prior = -0.5 * (
-            (lag_days[None, None, :, None] - center[:, :, None])
+            (lag_days[None, None, :, None] - center)
             / prior_scale[None, None, None]
         ).square()
         scores = scores + prior
@@ -177,6 +201,40 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         return self._normalize_and_aggregate(
             scores, candidate_values, destination, nodes
         )
+
+    def _travel_time_centers(
+        self,
+        candidate_states: Tensor,
+        destination_query: Tensor,
+        destination: Tensor,
+        travel_time: Tensor,
+        query_shift: Tensor,
+    ) -> Tensor:
+        """Return state-conditioned lag centers ``[B,E,L,R]`` in days."""
+        base = travel_time[None, :, None, None]
+        shift = query_shift[:, destination, None]
+        if self.travel_time_mode == "shift":
+            return (base + shift).expand(
+                candidate_states.shape[0],
+                candidate_states.shape[1],
+                candidate_states.shape[2],
+                self.num_heads,
+            )
+        if (
+            self.source_log_speed_weight is None
+            or self.destination_log_speed_weight is None
+        ):
+            raise RuntimeError("hydrology scaling requires speed weights")
+        source_log_speed = F.linear(
+            candidate_states, self.source_log_speed_weight
+        )
+        destination_log_speed = F.linear(
+            destination_query, self.destination_log_speed_weight
+        )[:, destination, None]
+        log_speed_ratio = self.max_log_speed_ratio * torch.tanh(
+            source_log_speed + destination_log_speed
+        )
+        return base * torch.exp(-log_speed_ratio) + shift
 
     def _message_states(
         self,
@@ -416,6 +474,8 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
         max_dynamic_shift_days: float = 2.0,
         attention_value_mode: str = "state",
         counterfactual_output_fusion: bool = False,
+        travel_time_mode: str = "shift",
+        max_speed_ratio: float = 4.0,
     ) -> None:
         super().__init__()
         if output_window <= 0 or target_dim <= 0:
@@ -443,6 +503,8 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
             prior_scale_days=prior_scale_days,
             max_dynamic_shift_days=max_dynamic_shift_days,
             value_mode=attention_value_mode,
+            travel_time_mode=travel_time_mode,
+            max_speed_ratio=max_speed_ratio,
         )
         self.fusion = GraphModulatedRecurrentFusion(hidden_dim, num_heads)
         self.output_shared = nn.Sequential(

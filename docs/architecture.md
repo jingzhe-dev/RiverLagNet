@@ -370,6 +370,32 @@ two auditable counterfactual endpoints rather than using unconstrained output
 addition. The formal candidate is
 `model=river_crossformer_recurrent_counterfactual`.
 
+### Innovation 6: Hydrology-conditioned travel-time scaling (HCTS)
+
+**Problem.** RCELA currently treats `travel_time_prior_days` as an additive
+centre with only a small destination-query shift. River velocity changes
+multiplicatively with hydrological state, so the same path can have a much
+shorter or longer effective lag without being well represented by a bounded
+additive offset.
+
+**Method.** HCTS predicts a bounded log speed ratio from the causally
+available candidate upstream state and destination query for every routing
+head:
+
+```text
+log r_ijh,tau = log(r_max) * tanh(w_s h_j,h-tau + w_d q_i,h)
+mu_ijh,tau = travel_time_ij / exp(log r_ijh,tau)
+              + shift_max * tanh(W_shift q_i,h)
+```
+
+Both speed projections are initialized to zero, so HCTS starts exactly at the
+static travel-time prior. `r_max` symmetrically bounds faster and slower
+transport, while positive lags and the original causal candidate construction
+remain unchanged. The mechanism is enabled by
+`model=river_crossformer_recurrent_dynamic_travel`; its state-dependent lag
+centres are routing parameters, not measurements of physical velocity or
+causal transport effects.
+
 ## Joint directed lag attention
 
 For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:
