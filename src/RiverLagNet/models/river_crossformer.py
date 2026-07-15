@@ -75,6 +75,7 @@ class RiverGraphCrossFormer(nn.Module):
         lag_prior_scale_days: float = 2.0,
         max_dynamic_shift_days: float = 2.0,
         attention_value_mode: str = "state",
+        counterfactual_output_fusion: bool = False,
         **_: object,
     ) -> None:
         super().__init__()
@@ -136,6 +137,7 @@ class RiverGraphCrossFormer(nn.Module):
                 prior_scale_days=lag_prior_scale_days,
                 max_dynamic_shift_days=max_dynamic_shift_days,
                 attention_value_mode=attention_value_mode,
+                counterfactual_output_fusion=counterfactual_output_fusion,
             )
             if fusion_mode == "recurrent"
             else None
@@ -146,6 +148,7 @@ class RiverGraphCrossFormer(nn.Module):
         self.attention_weights: Tensor | None = None
         self.fusion_weights: Tensor | None = None
         self.history_routing: Tensor | None = None
+        self.output_gate_values: Tensor | None = None
         self._upstream_residual_only = False
         self._expanded_graph_cache: tuple[Tensor, Tensor, Tensor] | None = None
 
@@ -241,6 +244,7 @@ class RiverGraphCrossFormer(nn.Module):
                 )
                 self.attention_weights = None
                 self.fusion_weights = None
+                self.output_gate_values = None
                 return prediction
             assert variant_edges is not None and variant_attr is not None
             attention_edges, attention_attr, path_hops = self._expanded_graph(
@@ -257,6 +261,7 @@ class RiverGraphCrossFormer(nn.Module):
                     path_hops,
                 )
             )
+            self.output_gate_values = self.recurrent_decoder.output_gate_values
             return prediction
         local_context = self.local_decoder.contextualize(local_state)
         local_prediction = self.local_decoder.decode_context(local_context)

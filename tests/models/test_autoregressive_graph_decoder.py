@@ -174,6 +174,20 @@ def _decoder() -> DirectedAutoregressiveGraphDecoder:
     ).eval()
 
 
+def _counterfactual_decoder() -> DirectedAutoregressiveGraphDecoder:
+    return DirectedAutoregressiveGraphDecoder(
+        hidden_dim=8,
+        edge_dim=2,
+        output_window=4,
+        target_dim=3,
+        num_heads=2,
+        max_lag=4,
+        max_path_hops=2,
+        dropout=0.0,
+        counterfactual_output_fusion=True,
+    ).eval()
+
+
 def _decoder_inputs() -> dict[str, torch.Tensor]:
     return {
         "history_states": torch.randn(2, 6, 4, 8),
@@ -228,6 +242,64 @@ def test_recurrent_fusion_changes_only_nodes_with_upstream_paths() -> None:
     assert torch.equal(graph[:, :, 0], local[:, :, 0])
     assert not torch.equal(graph[:, :, 1:3], local[:, :, 1:3])
     assert torch.equal(graph[:, :, 3], local[:, :, 3])
+
+
+def test_counterfactual_gate_one_nests_original_graph_decoder() -> None:
+    torch.manual_seed(17)
+    original = _decoder()
+    counterfactual = _counterfactual_decoder()
+    incompatible = counterfactual.load_state_dict(
+        original.state_dict(), strict=False
+    )
+    assert incompatible.missing_keys == ["counterfactual_gate_logits"]
+    assert incompatible.unexpected_keys == []
+    assert counterfactual.counterfactual_gate_logits is not None
+    with torch.no_grad():
+        counterfactual.counterfactual_gate_logits.fill_(100.0)
+    inputs = _decoder_inputs()
+    edge_index = torch.tensor([[0, 1], [1, 2]])
+    edge_attr = torch.tensor([[0.1, 1.0], [0.2, 1.0]])
+    graph_kwargs = {
+        "edge_index": edge_index,
+        "edge_attr": edge_attr,
+        "edge_hops": torch.ones(2, dtype=torch.long),
+    }
+
+    expected, _, _ = original(**inputs, **graph_kwargs)
+    actual, _, _ = counterfactual(**inputs, **graph_kwargs)
+
+    assert torch.equal(actual, expected)
+    assert counterfactual.output_gate_values is not None
+    assert torch.equal(
+        counterfactual.output_gate_values,
+        torch.ones_like(counterfactual.output_gate_values),
+    )
+
+
+def test_counterfactual_gate_zero_recovers_local_forecast() -> None:
+    torch.manual_seed(19)
+    decoder = _counterfactual_decoder()
+    assert decoder.counterfactual_gate_logits is not None
+    with torch.no_grad():
+        decoder.counterfactual_gate_logits.fill_(-100.0)
+        decoder.fusion.message_projection.weight.copy_(torch.eye(8))
+        decoder.fusion.modulation.weight.zero_()
+        decoder.fusion.modulation.weight[8:].copy_(torch.eye(8))
+        decoder.fusion.output_projection.weight.copy_(torch.eye(8))
+    inputs = _decoder_inputs()
+    edge_index = torch.tensor([[0, 1], [1, 2]])
+    edge_attr = torch.tensor([[0.1, 1.0], [0.2, 1.0]])
+
+    graph, _, _ = decoder(
+        **inputs,
+        edge_index=edge_index,
+        edge_attr=edge_attr,
+        edge_hops=torch.ones(2, dtype=torch.long),
+    )
+    local, _, _ = decoder(**inputs)
+
+    assert torch.equal(graph, local)
+    assert decoder.output_gate_values is None
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")

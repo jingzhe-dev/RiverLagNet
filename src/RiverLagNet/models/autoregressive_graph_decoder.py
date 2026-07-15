@@ -415,6 +415,7 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
         prior_scale_days: float = 2.0,
         max_dynamic_shift_days: float = 2.0,
         attention_value_mode: str = "state",
+        counterfactual_output_fusion: bool = False,
     ) -> None:
         super().__init__()
         if output_window <= 0 or target_dim <= 0:
@@ -424,6 +425,7 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
         self.target_dim = target_dim
         self.num_heads = num_heads
         self.max_lag = max_lag
+        self.counterfactual_output_fusion = counterfactual_output_fusion
         self.horizon_embedding = nn.Parameter(
             torch.empty(output_window, hidden_dim)
         )
@@ -450,6 +452,12 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
         self.output_heads = nn.ModuleList(
             nn.Linear(hidden_dim, 1) for _ in range(target_dim)
         )
+        self.counterfactual_gate_logits = (
+            nn.Parameter(torch.zeros(output_window, target_dim))
+            if counterfactual_output_fusion
+            else None
+        )
+        self.output_gate_values: Tensor | None = None
 
     def forward(
         self,
@@ -471,17 +479,38 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
 
         batch, _, nodes, _ = history_states.shape
         state = initial_state
+        local_state = initial_state
         future_states: list[Tensor] = []
         predictions: list[Tensor] = []
         routing: list[Tensor] = []
         fusion_weights: list[Tensor] = []
         values = previous_values
+        local_values = previous_values
         mask = previous_mask.to(previous_values.dtype)
+        local_mask = mask
         for horizon in range(self.output_window):
             feedback = self.feedback_encoder(torch.cat([values, mask], dim=-1))
-            transition_input = self.dropout(
-                feedback + self.horizon_embedding[horizon][None, None]
-            )
+            transition_input = feedback + self.horizon_embedding[horizon][None, None]
+            use_counterfactual = self.counterfactual_output_fusion and use_graph
+            if use_counterfactual:
+                local_feedback = self.feedback_encoder(
+                    torch.cat([local_values, local_mask], dim=-1)
+                )
+                local_transition_input = (
+                    local_feedback + self.horizon_embedding[horizon][None, None]
+                )
+                transition_input, local_transition_input = self._paired_dropout(
+                    transition_input, local_transition_input
+                )
+                local_state = self.local_transition(
+                    local_transition_input.reshape(
+                        batch * nodes, self.hidden_dim
+                    ),
+                    local_state.reshape(batch * nodes, self.hidden_dim),
+                ).reshape(batch, nodes, self.hidden_dim)
+                local_state = self.local_norm(local_state)
+            else:
+                transition_input = self.dropout(transition_input)
             state = self.local_transition(
                 transition_input.reshape(batch * nodes, self.hidden_dim),
                 state.reshape(batch * nodes, self.hidden_dim),
@@ -510,9 +539,26 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
                 fusion_weights.append(step_fusion)
 
             decoded = self.output_shared(state)
-            prediction = torch.cat(
+            graph_prediction = torch.cat(
                 [head(decoded) for head in self.output_heads], dim=-1
             )
+            if use_counterfactual:
+                local_decoded = self.output_shared(local_state)
+                local_prediction = torch.cat(
+                    [head(local_decoded) for head in self.output_heads], dim=-1
+                )
+                if self.counterfactual_gate_logits is None:
+                    raise RuntimeError("counterfactual fusion requires gate logits")
+                output_gate = torch.sigmoid(
+                    self.counterfactual_gate_logits[horizon]
+                ).to(graph_prediction.dtype)
+                prediction = local_prediction + output_gate[None, None] * (
+                    graph_prediction - local_prediction
+                )
+                local_values = local_prediction
+                local_mask = torch.ones_like(local_prediction)
+            else:
+                prediction = graph_prediction
             predictions.append(prediction)
             future_states.append(state)
             values = prediction
@@ -520,12 +566,29 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
 
         output = torch.stack(predictions, dim=1)
         if not use_graph:
+            self.output_gate_values = None
             return output, None, None
+        self.output_gate_values = (
+            torch.sigmoid(self.counterfactual_gate_logits)
+            if self.counterfactual_gate_logits is not None
+            else None
+        )
         return (
             output,
             torch.stack(routing, dim=1),
             torch.stack(fusion_weights, dim=1),
         )
+
+    def _paired_dropout(
+        self, graph_input: Tensor, local_input: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        """Apply one dropout mask to paired graph and counterfactual inputs."""
+        if not self.training or self.dropout.p == 0.0:
+            return graph_input, local_input
+        keep_probability = 1.0 - self.dropout.p
+        multiplier = torch.empty_like(graph_input).bernoulli_(keep_probability)
+        multiplier = multiplier / keep_probability
+        return graph_input * multiplier, local_input * multiplier
 
     def _validate_initial_inputs(
         self,

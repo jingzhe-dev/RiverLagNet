@@ -44,6 +44,13 @@ adds a zero-initialized, learnable upstream-minus-destination correction. The
 new model is therefore exactly nested in the absolute-state RCELA at
 initialization instead of committing to a fixed differencing assumption.
 
+`model=river_crossformer_recurrent_counterfactual` implements
+**Counterfactual Local–Graph Fusion (CLGF)**. Each forecast day advances a
+strict local Transformer recurrence beside the RCELA + GMRF recurrence, then a
+bounded target-by-horizon gate blends only their prediction difference. This
+lets TP or unstable long-lead corrections reject graph information without
+removing useful NH3N/CODMn transport signals.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

@@ -344,6 +344,32 @@ The deployable configuration is
 validation experiments; the attention weights remain routing preferences and
 must not be interpreted as causal effects.
 
+### Innovation 5: Counterfactual Local–Graph Fusion (CLGF)
+
+**Problem.** RCELA + GMRF uses one graph-modulated recurrent state for all
+targets. Validation diagnostics show that its graph correction is too strong
+overall and that a value mechanism can improve NH3N and CODMn while degrading
+TP. A single hidden-state correction cannot independently reject the harmful
+target.
+
+**Method.** CLGF retains a synchronized local Transformer recurrence as a
+counterfactual beside the graph recurrence. Both branches share temporal and
+output parameters and, during training, the same dropout mask. For horizon
+`h` and target `c`, a bounded gate combines only the graph innovation:
+
+```text
+y_local[h,c] = Decoder(z_local[h])[c]
+y_graph[h,c] = Decoder(z_graph[h])[c]
+g[h,c] = sigmoid(theta[h,c])
+y_hat[h,c] = y_local[h,c] + g[h,c] * (y_graph[h,c] - y_local[h,c])
+```
+
+`g=0` exactly recovers the no-graph recurrence and `g=1` exactly recovers the
+original RCELA + GMRF forecast. The graph model is therefore nested between
+two auditable counterfactual endpoints rather than using unconstrained output
+addition. The formal candidate is
+`model=river_crossformer_recurrent_counterfactual`.
+
 ## Joint directed lag attention
 
 For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:
