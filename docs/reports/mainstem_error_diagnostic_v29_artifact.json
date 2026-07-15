@@ -1,0 +1,243 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "RiverLagNet 河网增益误差诊断",
+    "description": "真实日尺度 61 站主干河网上的验证误差、图校正上限与下一模型机制诊断。",
+    "generatedAt": "2026-07-15T12:00:00+08:00",
+    "sources": [
+      {
+        "id": "mainstem-diagnostic",
+        "label": "61 站主干训练/验证误差诊断",
+        "path": "experiments/mainstem_error_diagnostic_v29.json"
+      },
+      {
+        "id": "scaling-query",
+        "label": "图校正缩放方案汇总",
+        "query": {
+          "engine": "SQLite",
+          "sql": "WITH scaling_ceiling(scheme, validation_nse, relative_gain_percent, fit_scope, rank) AS (\n  VALUES\n    ('项目目标',0.6715262353420257,15.0,'预设门槛',0),\n    ('同验证集 oracle',0.6035991311073303,3.36736887426101,'验证集，不可部署',1),\n    ('未缩放 8 跳模型',0.5930708646774292,1.564385497413548,'模型原始输出',2),\n    ('训练拟合：全局',0.5929130911827087,1.537366520435513,'训练集',3),\n    ('训练拟合：目标',0.5927959084510803,1.517298780073285,'训练集',4),\n    ('训练拟合：提前期×目标',0.5924399495124817,1.456340211689142,'训练集',5),\n    ('训练拟合：节点×目标',0.5920438170433044,1.388501858460574,'训练集',6),\n    ('训练拟合：节点×提前期×目标',0.5915907025337219,1.310905234740505,'训练集',7)\n)\nSELECT scheme, validation_nse, relative_gain_percent, fit_scope, rank\nFROM scaling_ceiling\nORDER BY rank;",
+          "description": "从已审计诊断 JSON 转录并实际执行的缩放方案汇总查询。",
+          "language": "sql",
+          "executed_at": "2026-07-15T12:00:00+08:00",
+          "tables_used": ["scaling_ceiling CTE"],
+          "filters": ["训练期拟合；验证期评价；oracle 明确标记不可部署"],
+          "metric_definitions": ["relative_gain_percent = 100 × (validation_nse - 0.5839358568191528) / |0.5839358568191528|"]
+        }
+      },
+      {
+        "id": "target-query",
+        "label": "目标变量 NSE 增量汇总",
+        "query": {
+          "engine": "SQLite",
+          "sql": "WITH target_delta(target, baseline_nse, graph_nse, delta_nse, ord) AS (\n  VALUES\n    ('NH3N',0.5118743181228638,0.5295019149780273,0.0176275968551636,1),\n    ('CODMn',0.9036074280738831,0.9046844840049744,0.0010770559310913,2),\n    ('TP',0.3363259434700012,0.3450263142585754,0.0087003707885742,3)\n)\nSELECT target, baseline_nse, graph_nse, delta_nse, ord AS 'order'\nFROM target_delta\nORDER BY ord;",
+          "description": "从已审计诊断 JSON 转录并实际执行的三个水质目标汇总查询。",
+          "language": "sql",
+          "executed_at": "2026-07-15T12:00:00+08:00",
+          "tables_used": ["target_delta CTE"],
+          "filters": ["验证集；NH3N、CODMn、TP 固定顺序"],
+          "metric_definitions": ["delta_nse = graph_nse - baseline_nse"]
+        }
+      },
+      {
+        "id": "horizon-query",
+        "label": "预测提前期 NSE 增量汇总",
+        "query": {
+          "engine": "SQLite",
+          "sql": "WITH horizon_bands(band, baseline_nse, graph_nse, delta_nse, ord) AS (\n  VALUES\n    ('1–7 天',0.6316916346549988,0.6447075009346008,0.0130158662796021,1),\n    ('8–14 天',0.5914888978004456,0.5975955128669739,0.0061066150665283,2),\n    ('15–30 天',0.5601149201393127,0.5689001679420471,0.0087852478027344,3)\n)\nSELECT band, baseline_nse, graph_nse, delta_nse, ord AS 'order'\nFROM horizon_bands\nORDER BY ord;",
+          "description": "从已审计诊断 JSON 转录并实际执行的预测提前期分段查询。",
+          "language": "sql",
+          "executed_at": "2026-07-15T12:00:00+08:00",
+          "tables_used": ["horizon_bands CTE"],
+          "filters": ["验证集；1–7、8–14、15–30 天"],
+          "metric_definitions": ["delta_nse = graph_nse - baseline_nse"]
+        }
+      }
+    ],
+    "cards": [],
+    "charts": [
+      {
+        "id": "scaling-ceiling-chart",
+        "title": "图校正缩放方案的相对 NSE 提升",
+        "subtitle": "训练期拟合后在验证期评价；同验证集 oracle 仅用于诊断；单位为百分比",
+        "showDescription": true,
+        "intent": "comparison",
+        "question": "对现有图校正重新缩放能否补齐 15% 目标？",
+        "rationale": "七种离散方案名称较长，横向条形图最便于与 15% 参考线比较。",
+        "comparisonContext": {
+          "baseline": "无图 Station GRU macro NSE 0.583936",
+          "denominator": "|无图 macro NSE|",
+          "grain": "缩放方案",
+          "unit": "%"
+        },
+        "type": "horizontalBar",
+        "dataset": "scaling_ceiling",
+        "sourceId": "scaling-query",
+        "encodings": {
+          "x": {"field": "scheme", "type": "nominal", "label": "方案"},
+          "y": {"field": "relative_gain_percent", "type": "quantitative", "label": "相对 NSE 提升", "unit": "%"},
+          "tooltip": [
+            {"field": "validation_nse", "type": "quantitative", "label": "验证 macro NSE"},
+            {"field": "fit_scope", "type": "nominal", "label": "拟合范围"}
+          ]
+        },
+        "valueFormat": "number",
+        "unit": "%",
+        "layout": "full",
+        "maxRows": 8,
+        "surface": {"surface": "export", "showControls": false, "viewMode": "visualization"}
+      },
+      {
+        "id": "target-delta-chart",
+        "title": "三个水质目标的验证 NSE 增量",
+        "subtitle": "8 跳 RiverLagNet 减去同一无图基线；正值表示河网信息改善预测",
+        "showDescription": true,
+        "intent": "comparison",
+        "question": "河网增益集中在哪个水质目标？",
+        "rationale": "三个预定义目标均需展示，按固定目标顺序使用简单柱状图。",
+        "comparisonContext": {
+          "baseline": "每个目标的无图 NSE",
+          "grain": "水质目标",
+          "unit": "NSE"
+        },
+        "type": "bar",
+        "dataset": "target_delta",
+        "sourceId": "target-query",
+        "encodings": {
+          "x": {"field": "target", "type": "ordinal", "label": "目标"},
+          "y": {"field": "delta_nse", "type": "quantitative", "label": "ΔNSE"},
+          "tooltip": [
+            {"field": "baseline_nse", "type": "quantitative", "label": "无图 NSE"},
+            {"field": "graph_nse", "type": "quantitative", "label": "加图 NSE"}
+          ]
+        },
+        "valueFormat": "number",
+        "layout": "full",
+        "maxRows": 3,
+        "referenceLines": [
+          {"axis": "y", "value": 0.0, "label": "无增益", "color": "neutral", "lineStyle": "solid"}
+        ],
+        "surface": {"surface": "export", "showControls": false, "viewMode": "visualization"}
+      }
+    ],
+    "tables": [
+      {
+        "id": "horizon-table",
+        "title": "预测提前期分段结果",
+        "subtitle": "验证集，按 1–7、8–14 和 15–30 天分段计算 macro NSE",
+        "dataset": "horizon_bands",
+        "defaultSort": {"field": "order", "direction": "asc"},
+        "density": "spacious",
+        "sourceId": "horizon-query",
+        "layout": "full",
+        "columns": [
+          {"field": "order", "label": "序", "format": "number"},
+          {"field": "band", "label": "提前期", "type": "text"},
+          {"field": "baseline_nse", "label": "无图 NSE", "format": "number"},
+          {"field": "graph_nse", "label": "加图 NSE", "format": "number"},
+          {"field": "delta_nse", "label": "ΔNSE", "format": "number", "movement": true}
+        ]
+      }
+    ],
+    "blocks": [
+      {"id": "title", "type": "markdown", "layout": "full", "body": "# RiverLagNet 河网增益误差诊断"},
+      {"id": "technical-summary", "type": "markdown", "layout": "full", "sourceId": "mainstem-diagnostic", "body": "## 技术摘要\n\n- **当前 15% 目标未实现。** 无图验证 macro NSE 为 `0.583936`，8 跳 RiverLagNet 为 `0.593071`，相对提升 `1.56%`；目标要求 `0.671527`。\n- **旧图校正的重标定不是突破口。** 图校正与无图残差的相关系数仅 `0.132`；训练期拟合的所有缩放方案均未超过未缩放模型，同验证集逐节点逐提前期 oracle 也只达到 `0.603599`。\n- **新模型必须产生不同的图信号。** 增益主要来自 NH3N（ΔNSE `+0.0176`）和 1–7 天（`+0.0130`），支持改用逐日有向自回归图解码，而不是继续调 gate 或缩放。"},
+      {"id": "scaling-heading", "type": "markdown", "layout": "full", "sourceId": "mainstem-diagnostic", "body": "## 现有图校正即使理想缩放也无法达到门槛\n\n下图把已选 8 跳模型、训练期拟合缩放和同验证集 oracle 放在同一相对增益尺度上。训练期缩放全部略微降低验证 NSE；即使允许使用验证目标拟合 5,490 个节点–提前期–目标缩放参数，提升也只有 `3.37%`。这证明当前修正方向缺少足够信息，而不只是幅度失准。"},
+      {"id": "scaling-chart-block", "type": "chart", "layout": "full", "chartId": "scaling-ceiling-chart"},
+      {"id": "target-heading", "type": "markdown", "layout": "full", "sourceId": "mainstem-diagnostic", "body": "## 可学习增益集中在 NH3N 和短提前期\n\nNH3N 的 ΔNSE 为 `+0.0176`，约为 TP 的两倍、CODMn 的十六倍；1–7 天的 ΔNSE 为 `+0.0130`，高于 8–14 天和 15–30 天。图机制应在逐日解码时把上游状态作为未来状态转移的一部分，而不是在 30 天直接输出后统一修正。"},
+      {"id": "target-chart-block", "type": "chart", "layout": "full", "chartId": "target-delta-chart"},
+      {"id": "horizon-table-block", "type": "table", "layout": "full", "tableId": "horizon-table"},
+      {"id": "scope", "type": "markdown", "layout": "full", "body": "## 比较范围与指标定义\n\n分析对象是拓扑预定义的 61 站连续主干，共 60 条上游→下游边；输入为过去 90 天真实日尺度数据，输出为未来 30 天 NH3N、CODMn 和 TP。数据按时间顺序划分 70%/15%/15%，本报告只用训练集拟合诊断参数、用验证集评价，测试集保持封存。macro NSE 是三个目标的 mask-aware NSE 均值。"},
+      {"id": "method", "type": "markdown", "layout": "full", "sourceId": "mainstem-diagnostic", "body": "## 误差分解与缩放上限方法\n\n对同一批窗口同时重建 Station GRU 与 8 跳 RiverLagNet 预测，定义图校正 `c = y_graph − y_no_graph`、无图残差 `r = y_true − y_no_graph`。在训练窗口上用带微小岭稳定项的最小二乘拟合 `r ≈ γc`，分别测试全局、目标、提前期×目标、节点×目标和节点×提前期×目标缩放；再固定 γ 到验证集评价。另设同验证集 oracle，只用于判断当前图校正基底的上限。"},
+      {"id": "limitations", "type": "markdown", "layout": "full", "sourceId": "mainstem-diagnostic", "body": "## 限制与稳健性边界\n\n- 当前诊断基于 seed 42 的验证已选 checkpoint，不能替代多种子确认。\n- 同验证集 oracle 使用评价期目标拟合，完全不可部署，也不能作为模型结果。\n- 单节点 NSE 在低方差节点上可能极端，因此节点结论使用正负节点数和中位数，不用均值排序证明总体增益。\n- 图权重与误差相关只代表预测关联，不解释为污染物因果贡献。"},
+      {"id": "next-steps", "type": "markdown", "layout": "full", "body": "## 下一步：让河网进入逐日状态转移\n\n实现有向时滞自回归图解码器：每个未来日先更新本站状态，再从已预测的上游早期状态或输入窗历史状态读取旅行时间对齐候选，以路径–时滞 attention 聚合后生成当日预测。无图对照使用完全相同的自回归解码器但关闭上游消息。先做 seed 42 同预算筛选；只有验证相对提升达到 15% 才启动多种子确认。"},
+      {"id": "questions", "type": "markdown", "layout": "full", "body": "## 尚待回答的问题\n\n1. 逐日状态转移能否把 1–7 天 NH3N 增益扩展到更长提前期？\n2. 固定旅行时间先验是否需要由流量或季节条件动态调整？\n3. 若新的图信号基底仍无法使验证 oracle 接近 15%，是否需要补充逐河段流量、闸坝或排污事件数据？"}
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-07-15T12:00:00+08:00",
+    "status": "ready",
+    "datasets": {
+      "headline": [
+        {
+          "baseline_nse": 0.5839358568191528,
+          "graph_nse": 0.5930708646774292,
+          "graph_gain_rate": 0.01564385497413548,
+          "target_nse": 0.6715262353420257,
+          "target_gap": -0.0784553706645965
+        }
+      ],
+      "scaling_ceiling": [
+        {"scheme": "项目目标", "validation_nse": 0.6715262353420257, "relative_gain_percent": 15.0, "fit_scope": "预设门槛", "rank": 0},
+        {"scheme": "同验证集 oracle", "validation_nse": 0.6035991311073303, "relative_gain_percent": 3.36736887426101, "fit_scope": "验证集，不可部署", "rank": 1},
+        {"scheme": "未缩放 8 跳模型", "validation_nse": 0.5930708646774292, "relative_gain_percent": 1.564385497413548, "fit_scope": "模型原始输出", "rank": 2},
+        {"scheme": "训练拟合：全局", "validation_nse": 0.5929130911827087, "relative_gain_percent": 1.537366520435513, "fit_scope": "训练集", "rank": 3},
+        {"scheme": "训练拟合：目标", "validation_nse": 0.5927959084510803, "relative_gain_percent": 1.517298780073285, "fit_scope": "训练集", "rank": 4},
+        {"scheme": "训练拟合：提前期×目标", "validation_nse": 0.5924399495124817, "relative_gain_percent": 1.456340211689142, "fit_scope": "训练集", "rank": 5},
+        {"scheme": "训练拟合：节点×目标", "validation_nse": 0.5920438170433044, "relative_gain_percent": 1.388501858460574, "fit_scope": "训练集", "rank": 6},
+        {"scheme": "训练拟合：节点×提前期×目标", "validation_nse": 0.5915907025337219, "relative_gain_percent": 1.310905234740505, "fit_scope": "训练集", "rank": 7}
+      ],
+      "target_delta": [
+        {"target": "NH3N", "baseline_nse": 0.5118743181228638, "graph_nse": 0.5295019149780273, "delta_nse": 0.0176275968551636, "order": 1},
+        {"target": "CODMn", "baseline_nse": 0.9036074280738831, "graph_nse": 0.9046844840049744, "delta_nse": 0.0010770559310913, "order": 2},
+        {"target": "TP", "baseline_nse": 0.3363259434700012, "graph_nse": 0.3450263142585754, "delta_nse": 0.0087003707885742, "order": 3}
+      ],
+      "horizon_bands": [
+        {"band": "1–7 天", "baseline_nse": 0.6316916346549988, "graph_nse": 0.6447075009346008, "delta_nse": 0.0130158662796021, "order": 1},
+        {"band": "8–14 天", "baseline_nse": 0.5914888978004456, "graph_nse": 0.5975955128669739, "delta_nse": 0.0061066150665283, "order": 2},
+        {"band": "15–30 天", "baseline_nse": 0.5601149201393127, "graph_nse": 0.5689001679420471, "delta_nse": 0.0087852478027344, "order": 3}
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "mainstem-diagnostic",
+      "label": "61 站主干训练/验证误差诊断",
+      "path": "experiments/mainstem_error_diagnostic_v29.json"
+    },
+    {
+      "id": "scaling-query",
+      "label": "图校正缩放方案汇总",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH scaling_ceiling(scheme, validation_nse, relative_gain_percent, fit_scope, rank) AS (\n  VALUES\n    ('项目目标',0.6715262353420257,15.0,'预设门槛',0),\n    ('同验证集 oracle',0.6035991311073303,3.36736887426101,'验证集，不可部署',1),\n    ('未缩放 8 跳模型',0.5930708646774292,1.564385497413548,'模型原始输出',2),\n    ('训练拟合：全局',0.5929130911827087,1.537366520435513,'训练集',3),\n    ('训练拟合：目标',0.5927959084510803,1.517298780073285,'训练集',4),\n    ('训练拟合：提前期×目标',0.5924399495124817,1.456340211689142,'训练集',5),\n    ('训练拟合：节点×目标',0.5920438170433044,1.388501858460574,'训练集',6),\n    ('训练拟合：节点×提前期×目标',0.5915907025337219,1.310905234740505,'训练集',7)\n)\nSELECT scheme, validation_nse, relative_gain_percent, fit_scope, rank\nFROM scaling_ceiling\nORDER BY rank;",
+        "description": "从已审计诊断 JSON 转录并实际执行的缩放方案汇总查询。",
+        "language": "sql",
+        "executed_at": "2026-07-15T12:00:00+08:00",
+        "tables_used": ["scaling_ceiling CTE"],
+        "filters": ["训练期拟合；验证期评价；oracle 明确标记不可部署"],
+        "metric_definitions": ["relative_gain_percent = 100 × (validation_nse - 0.5839358568191528) / |0.5839358568191528|"]
+      }
+    },
+    {
+      "id": "target-query",
+      "label": "目标变量 NSE 增量汇总",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH target_delta(target, baseline_nse, graph_nse, delta_nse, ord) AS (\n  VALUES\n    ('NH3N',0.5118743181228638,0.5295019149780273,0.0176275968551636,1),\n    ('CODMn',0.9036074280738831,0.9046844840049744,0.0010770559310913,2),\n    ('TP',0.3363259434700012,0.3450263142585754,0.0087003707885742,3)\n)\nSELECT target, baseline_nse, graph_nse, delta_nse, ord AS 'order'\nFROM target_delta\nORDER BY ord;",
+        "description": "从已审计诊断 JSON 转录并实际执行的三个水质目标汇总查询。",
+        "language": "sql",
+        "executed_at": "2026-07-15T12:00:00+08:00",
+        "tables_used": ["target_delta CTE"],
+        "filters": ["验证集；NH3N、CODMn、TP 固定顺序"],
+        "metric_definitions": ["delta_nse = graph_nse - baseline_nse"]
+      }
+    },
+    {
+      "id": "horizon-query",
+      "label": "预测提前期 NSE 增量汇总",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH horizon_bands(band, baseline_nse, graph_nse, delta_nse, ord) AS (\n  VALUES\n    ('1–7 天',0.6316916346549988,0.6447075009346008,0.0130158662796021,1),\n    ('8–14 天',0.5914888978004456,0.5975955128669739,0.0061066150665283,2),\n    ('15–30 天',0.5601149201393127,0.5689001679420471,0.0087852478027344,3)\n)\nSELECT band, baseline_nse, graph_nse, delta_nse, ord AS 'order'\nFROM horizon_bands\nORDER BY ord;",
+        "description": "从已审计诊断 JSON 转录并实际执行的预测提前期分段查询。",
+        "language": "sql",
+        "executed_at": "2026-07-15T12:00:00+08:00",
+        "tables_used": ["horizon_bands CTE"],
+        "filters": ["验证集；1–7、8–14、15–30 天"],
+        "metric_definitions": ["delta_nse = graph_nse - baseline_nse"]
+      }
+    }
+  ]
+}
