@@ -1,0 +1,16 @@
+name: river_crossformer
+hidden_dim: 64
+target_dim: 3
+max_lag: 30
+graph_variant: directed
+graph_seed: ${seed}
+transformer_heads: 4
+transformer_layers: 2
+graph_heads: 4
+history_steps: 8
+max_path_hops: 8
+use_target_transport: false
+fusion_mode: recurrent
+dropout: 0.1
+lag_prior_scale_days: 2.0
+max_dynamic_shift_days: 2.0

@@ -20,6 +20,19 @@ graph information is injected conditionally rather than concatenated or added
 uniformly. The paired `model.graph_variant=no_graph` condition retains the same
 Transformer backbone and training budget.
 
+The next validation candidate, `model=river_crossformer_recurrent`, moves both
+innovations into the forecast trajectory. **Recursive Causal Edge-Lag
+Attention (RCELA)** uses only observed upstream history or earlier
+model-predicted states, jointly normalizes incoming path-lag candidates, and
+adapts the travel-time prior with the current Transformer query.
+**Graph-Modulated Recurrent Fusion (GMRF)** injects that directed GNN message
+inside each future hidden-state transition. It addresses the measured failure
+of late graph corrections: even validation-fitted rescaling of the old graph
+correction reached only `+3.37%`, so a new state-transition signal basis is
+required. The graph projection is zero-started and headwaters stay exactly
+local; formal gains must still be established on validation data before any
+15% claim is made.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

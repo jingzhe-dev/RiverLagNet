@@ -239,6 +239,81 @@ question: preserve transient upstream covariates before temporal compression,
 select physically admissible edge-lag routes for each prediction lead, and
 inject them only when the local Transformer query requests that routing head.
 
+### Innovation 3: Recursive Causal Edge-Lag Attention (RCELA)
+
+**Problem.** MAP-LHSA improves routing, but its graph branch is still a late
+correction to a direct 30-day decoder. The paired validation-error diagnostic
+shows that even an explicitly non-deployable validation-fitted rescaling of
+that correction reaches only `+3.37%` relative macro NSE, far below the 15%
+target. The limiting factor is therefore the correction basis, not its scalar
+amplitude. In particular, a direct decoder cannot let an upstream prediction
+at day `h-tau` change a downstream state at day `h` and then continue to
+propagate through later forecast days.
+
+**Method.** With `fusion_mode=recurrent`, RiverGraph CrossFormer replaces the
+direct output correction with RCELA. For forecast lead `h=1..T_out` and
+strictly positive lag `tau=1..max_lag`, its source state is
+
+```text
+s_j(h,tau) = H_j[T_in - 1 + h - tau],  if h - tau <= 0
+             Z_j[h - tau - 1],          if h - tau > 0
+```
+
+where `H` is observed-history Transformer state and `Z` is an earlier model
+prediction state. There is no `tau=0` candidate, so the attention cannot form
+a same-step graph cycle or read the current/future target. Scores combine the
+destination Transformer query, upstream key, cumulative path attributes,
+path-hop embedding, lag embedding, and a Gaussian travel-time prior. A
+query-dependent bounded shift adapts the prior centre to the current state:
+
+```text
+mu_ijh,r = travel_time_ij + shift_max * tanh(W_shift,r q_i,h)
+alpha_ijh,tau,r = sparsemax_(j,tau in incoming(i)) score_ijh,tau,r
+```
+
+Sparsemax is normalized jointly across all incoming ancestor paths and lags
+for each destination, lead, and head. Thus the attention innovation solves
+two concrete weaknesses: fixed travel-time alignment under state-dependent
+transport, and the inability of late attention to route already-predicted
+upstream states through the future trajectory.
+
+### Innovation 4: Graph-Modulated Recurrent Fusion (GMRF)
+
+**Problem.** A serial `Transformer -> GNN -> additive output residual` asks a
+small final correction to repair a forecast whose 30-day hidden trajectory was
+already created without the river network. This explains why increasingly
+fine correction gates did not materially improve the validation ceiling.
+
+**Method.** GMRF inserts the directed GNN message inside every future hidden
+state transition. First an autoregressive GRU cell advances the local
+Transformer state from the previous predicted targets and a lead embedding.
+RCELA then returns one token per routing head. Query-head competition selects
+the useful graph subspaces, and the selected message generates a gated affine
+modulation of the local state:
+
+```text
+L_i,h = GRUCell(lead_h + feedback(y_hat_i,h-1), Z_i,h-1)
+beta_i,h,r = softmax_r(<W_q L_i,h, M_i,h,r>)
+M_i,h = concat_r(beta_i,h,r M_i,h,r)
+(gamma_i,h, b_i,h) = W_mod M_i,h
+Z_i,h = L_i,h + W_zero[ sigmoid(W_g[L_i,h,M_i,h])
+                         * SiLU(tanh(gamma_i,h)*L_i,h + b_i,h) ]
+```
+
+`W_zero` is initialized to exactly zero. Therefore a directed model copied to
+`no_graph` produces bitwise-identical forecasts at initialization, and a node
+without an upstream path remains exactly local even after graph parameters are
+activated. Unlike late fusion, however, a learned upstream change becomes the
+state used for both the current prediction and every subsequent forecast-day
+transition. This is the Transformer-GNN fusion innovation: graph information
+changes temporal state evolution, rather than merely being concatenated or
+added after temporal decoding.
+
+The deployable configuration is
+`model=river_crossformer_recurrent`. Its formal claim still depends on paired
+validation experiments; the attention weights remain routing preferences and
+must not be interpreted as causal effects.
+
 ## Joint directed lag attention
 
 For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:

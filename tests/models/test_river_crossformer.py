@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import torch
 
-from RiverLagNet.models.river_crossformer import RiverGraphCrossFormer
+from RiverLagNet.models.river_crossformer import (
+    RiverGraphCrossFormer,
+    latest_observed_targets,
+)
 
 
 def _inputs() -> dict[str, torch.Tensor]:
@@ -133,3 +136,95 @@ def test_crossformer_expands_directed_ancestor_paths_for_attention_only() -> Non
     assert output.shape == (2, 4, 4, 3)
     assert model.attention_weights is not None
     assert model.attention_weights.shape == (2, 4, 5, 5, 2)
+
+
+def _recurrent_model(graph_variant: str = "directed") -> RiverGraphCrossFormer:
+    return RiverGraphCrossFormer(
+        value_dim=5,
+        static_dim=2,
+        time_dim=4,
+        edge_dim=2,
+        hidden_dim=8,
+        output_window=4,
+        target_dim=3,
+        max_lag=4,
+        graph_variant=graph_variant,
+        transformer_heads=2,
+        transformer_layers=1,
+        graph_heads=2,
+        history_steps=2,
+        max_path_hops=1,
+        fusion_mode="recurrent",
+        dropout=0.0,
+    ).eval()
+
+
+def test_latest_observed_targets_respects_per_channel_missingness() -> None:
+    x = torch.tensor(
+        [
+            [
+                [[1.0, 10.0, 100.0], [2.0, 20.0, 200.0]],
+                [[3.0, 30.0, 300.0], [4.0, 40.0, 400.0]],
+                [[5.0, 50.0, 500.0], [6.0, 60.0, 600.0]],
+            ]
+        ]
+    )
+    mask = torch.tensor(
+        [
+            [
+                [[True, False, False], [False, False, False]],
+                [[False, True, False], [True, False, False]],
+                [[True, False, False], [False, False, True]],
+            ]
+        ]
+    )
+
+    values, available = latest_observed_targets(x, mask, target_dim=3)
+
+    assert values.tolist() == [[[5.0, 30.0, 0.0], [4.0, 0.0, 600.0]]]
+    assert available.tolist() == [
+        [[True, True, False], [True, False, True]]
+    ]
+
+
+def test_recurrent_crossformer_zero_starts_at_same_no_graph_model() -> None:
+    torch.manual_seed(31)
+    graph = _recurrent_model("directed")
+    local = _recurrent_model("no_graph")
+    local.load_state_dict(graph.state_dict(), strict=True)
+    inputs = _inputs()
+
+    graph_output = graph(**inputs)
+    local_output = local(**inputs)
+
+    assert graph_output.shape == (2, 4, 4, 3)
+    assert torch.equal(graph_output, local_output)
+    assert graph.attention_weights is not None
+    assert graph.attention_weights.shape == (2, 4, 3, 4, 2)
+    assert graph.fusion_weights is not None
+    assert graph.fusion_weights.shape == (2, 4, 4, 2)
+
+
+def test_recurrent_residual_training_only_unfreezes_attention_and_fusion() -> None:
+    model = _recurrent_model("directed")
+
+    model.configure_upstream_residual_training()
+    model.train()
+    trainable = [
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    ]
+
+    assert trainable
+    assert all(
+        name.startswith(
+            (
+                "recurrent_decoder.attention.",
+                "recurrent_decoder.fusion.",
+            )
+        )
+        for name in trainable
+    )
+    assert model.recurrent_decoder is not None
+    assert not model.recurrent_decoder.local_transition.training
+    assert model.recurrent_decoder.attention.training
+    assert model.recurrent_decoder.fusion.training
