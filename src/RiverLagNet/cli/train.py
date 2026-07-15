@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from RiverLagNet.models.riverlag_net import RiverLagNet
 from RiverLagNet.models.river_crossformer import RiverGraphCrossFormer
 from RiverLagNet.training.callbacks import RuntimeStatsCallback
 from RiverLagNet.training.experiment_log import ExperimentRecord, append_experiment_record
+from RiverLagNet.training.budget import resolve_training_budget
+from RiverLagNet.training.gpu_lock import SingleGpuLock
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
 
 
@@ -216,55 +219,75 @@ def run(cfg: DictConfig) -> dict[str, Any]:
     accelerator = str(cfg.trainer.accelerator)
     use_cuda = torch.cuda.is_available() and accelerator != "cpu"
     precision = str(cfg.trainer.precision) if use_cuda else "32-true"
-    trainer = Trainer(
-        accelerator=accelerator,
-        devices=cfg.trainer.devices,
-        precision=precision,
-        max_epochs=int(cfg.trainer.max_epochs),
-        deterministic=bool(cfg.trainer.deterministic),
-        gradient_clip_val=float(cfg.trainer.gradient_clip_val),
-        fast_dev_run=bool(cfg.trainer.fast_dev_run),
-        log_every_n_steps=int(cfg.trainer.log_every_n_steps),
-        default_root_dir=run_dir,
-        callbacks=callbacks,
-        logger=loggers,
-        enable_progress_bar=bool(cfg.trainer.enable_progress_bar),
-        enable_checkpointing=not bool(cfg.trainer.fast_dev_run),
+    budget = resolve_training_budget(
+        int(cfg.data.batch_size),
+        int(cfg.trainer.effective_batch_size),
+        int(cfg.trainer.max_steps),
     )
     should_record = bool(cfg.experiment.record_result) and not bool(cfg.trainer.fast_dev_run)
-    try:
-        trainer.fit(module, datamodule=datamodule)
-    except Exception as error:
-        if should_record:
-            crash_record = _experiment_record(
-                cfg,
-                runtime,
-                None,
-                status="crash",
-                description=f"{type(error).__name__}: {error}",
-            )
-            append_experiment_record(Path(str(cfg.experiment.results_path)), crash_record)
-        raise
-
-    validation_metrics: dict[str, Any] = {}
-    record: ExperimentRecord | None = None
-    if should_record:
-        validation_results = trainer.validate(
-            module, datamodule=datamodule, ckpt_path="best", verbose=False
+    lock_context = (
+        SingleGpuLock(
+            Path(str(cfg.trainer.gpu_lock_path)), run_name=str(cfg.experiment.name)
         )
-        if len(validation_results) != 1:
-            raise RuntimeError("expected one validation metric dictionary")
-        validation_metrics = validation_results[0]
-        record = _experiment_record(cfg, runtime, validation_metrics)
-        append_experiment_record(Path(str(cfg.experiment.results_path)), record)
-    return {
-        "trainer": trainer,
-        "module": module,
-        "datamodule": datamodule,
-        "checkpoint_path": checkpoint.best_model_path if not cfg.trainer.fast_dev_run else "",
-        "validation_metrics": validation_metrics,
-        "experiment_record": record,
-    }
+        if use_cuda and bool(cfg.trainer.use_gpu_lock)
+        else nullcontext()
+    )
+    with lock_context:
+        trainer = Trainer(
+            accelerator=accelerator,
+            devices=cfg.trainer.devices,
+            precision=precision,
+            max_epochs=int(cfg.trainer.max_epochs),
+            max_steps=budget.max_optimizer_steps,
+            accumulate_grad_batches=budget.gradient_accumulation,
+            deterministic=bool(cfg.trainer.deterministic),
+            gradient_clip_val=float(cfg.trainer.gradient_clip_val),
+            fast_dev_run=bool(cfg.trainer.fast_dev_run),
+            log_every_n_steps=int(cfg.trainer.log_every_n_steps),
+            default_root_dir=run_dir,
+            callbacks=callbacks,
+            logger=loggers,
+            enable_progress_bar=bool(cfg.trainer.enable_progress_bar),
+            enable_checkpointing=not bool(cfg.trainer.fast_dev_run),
+        )
+        try:
+            trainer.fit(module, datamodule=datamodule)
+        except Exception as error:
+            if should_record:
+                crash_record = _experiment_record(
+                    cfg,
+                    runtime,
+                    None,
+                    status="crash",
+                    description=f"{type(error).__name__}: {error}",
+                )
+                append_experiment_record(
+                    Path(str(cfg.experiment.results_path)), crash_record
+                )
+            raise
+
+        validation_metrics: dict[str, Any] = {}
+        record: ExperimentRecord | None = None
+        if should_record:
+            validation_results = trainer.validate(
+                module, datamodule=datamodule, ckpt_path="best", verbose=False
+            )
+            if len(validation_results) != 1:
+                raise RuntimeError("expected one validation metric dictionary")
+            validation_metrics = validation_results[0]
+            record = _experiment_record(cfg, runtime, validation_metrics)
+            append_experiment_record(Path(str(cfg.experiment.results_path)), record)
+        return {
+            "trainer": trainer,
+            "module": module,
+            "datamodule": datamodule,
+            "checkpoint_path": (
+                checkpoint.best_model_path if not cfg.trainer.fast_dev_run else ""
+            ),
+            "validation_metrics": validation_metrics,
+            "experiment_record": record,
+            "training_budget": budget,
+        }
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="config")

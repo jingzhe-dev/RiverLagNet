@@ -124,3 +124,5 @@
 - 2026-07-15｜实施计划接口检索首次在仓库父目录执行｜只依据会话工作目录，未先确认 Git 仓库根目录，导致 `rg` 报告源码路径不存在｜定位到 `Code/RiverLagNet` 后重新执行检索｜任何仓库命令前先用目录清单或 `git rev-parse --show-toplevel` 确认根目录
 - 2026-07-15｜实施计划自审首次把通配符直接作为 Windows `rg` 路径参数｜沿用 shell 展开通配符的假设，但 PowerShell 未替 `rg` 展开该路径｜改用固定目录和 `-g` 文件过滤重新检查｜Windows 下调用 `rg` 时用 `-g` 表达文件模式，不依赖 shell 路径通配展开
 - 2026-07-15｜实施计划交付的两次完整测试通过 `conda run` 均在 site 导入前遇到 `.pth` UTF-8 解码失败｜首次遗漏已知约束，第二次又错误假设进程级 `PYTHONUTF8=0` 足以覆盖 Conda 包装层｜改用 DeepWater 解释器绝对路径和 `-X utf8=0`，确认 `cp936` 后重跑并通过 195 项测试｜本机验证优先使用环境解释器绝对路径与显式 Python 启动参数，不依赖 Conda 对编码环境变量的转发
+- 2026-07-15｜用 `fast_dev_run` 后的 `Trainer.max_steps` 断言预算配置传播，导致测试错误失败｜忽略了 Lightning 会把 fast-dev 的公开步数强制重写为 1｜改用非 fast-dev 的 2-step 短运行验证预算传播｜后续不得用 fast-dev 模式断言用户配置的训练上限
+- 2026-07-15｜把预算传播测试改成 epoch 内提前停止的非 fast-dev 运行，触发缺少验证指标的 strict EarlyStopping｜未考虑 `max_steps` 可在首次 validation 前终止｜改为断言 CLI 返回的已解析预算元数据并保留 fast-dev 链路 smoke｜短预算测试不得依赖完整 epoch/validation 控制流
