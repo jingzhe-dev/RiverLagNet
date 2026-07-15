@@ -56,6 +56,21 @@ y_mask:        [B, T_out, N, 3]
 
 Forecast target timestamps define the chronological 70/15/15 splits. Every target window lies wholly inside one split and all inputs precede its first target. Validation/test inputs may use earlier history, but target timestamps never overlap across splits. Feature means and standard deviations are fitted from observed values before the training boundary only.
 
+RiverLagNet v0.2 replaces the legacy development split with three expanding
+rolling-origin folds: train/validation `[0,55%)/[55%,65%)`,
+`[0,65%)/[65%,75%)`, and `[0,75%)/[75%,85%)`. The final `[85%,100%)`
+interval is sealed until Session D. Each fold fits its scaler only on its own
+training interval, and the v0.2 data module does not construct a test dataset.
+
+## Versioned v0.2 manifest
+
+`python -m RiverLagNet.cli.write_data_manifest` writes the versioned
+`experiments/v0.2_data_manifest.json`. It records the complete NPZ SHA-256,
+dimensions, feature and target roles, date bounds, per-variable observation
+fractions, graph direction, and hashes of node order, edge order, and the
+observation mask. It deliberately contains no raw observations. Any content
+change therefore requires a new dataset version and a new set of paired runs.
+
 ## Prepared China real daily dataset
 
 `RiverLagNet.data.prepare_china_real_daily` converts the continuous China source into a reviewable long Parquet table and a compact NPZ tensor artifact. Graph nodes are monitored HydroRIVERS segments; the retained mapping table connects each node to one or more source monitoring stations. If several stations map to one segment, the daily node value is the mean of values whose source flag says they were not imputed.

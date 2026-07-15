@@ -1,0 +1,16 @@
+protocol_version: riverlagnet-v0.2-20260715
+dataset_manifest: experiments/v0.2_data_manifest.json
+targets: [NH3N, CODMn, TP]
+input_windows: [90, 180, 365]
+output_window: 30
+folds: [v02_fold_a, v02_fold_b, v02_fold_c]
+final_test_fraction: [0.85, 1.00]
+selection_metric: val_macro_nse
+seeds: [42, 43, 44, 45, 46]
+screening_epochs: [25, 50, 100]
+confirmation_patience: 12
+max_trials_per_family: 12
+relative_gain_target_percent: 15.0
+parameter_ratio_bounds: [0.90, 1.10]
+graph_wall_time_soft_limit: 2.0
+graph_wall_time_hard_limit: 3.0
