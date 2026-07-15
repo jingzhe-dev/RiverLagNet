@@ -41,7 +41,7 @@ The sole formal benchmark is the 1,068-node real daily contracted river network 
 data/processed/china-real-daily-contracted-1068-extended-v0.4/dataset.npz
 ```
 
-Stage S3 will freeze its manifest, hashes, node order, edge order, variable order, date range, masks, and graph statistics. A content change creates a new version and invalidates prior paired comparisons.
+Session A will freeze its manifest, hashes, node order, edge order, variable order, date range, masks, and graph statistics. A content change creates a new version and invalidates prior paired comparisons.
 
 ### 3.2 Secondary datasets
 
@@ -71,7 +71,7 @@ The final 15% of dates remain sealed until all model and hyperparameter decision
 | B | `[0%, 65%)` | `[65%, 75%)` |
 | C | `[0%, 75%)` | `[75%, 85%)` |
 
-Window construction must not cross a fold boundary. Each fold fits normalization from its own training observations. No final-test target, metric, prediction, visualization, or statistic may be opened before S10.
+Window construction must not cross a fold boundary. Each fold fits normalization from its own training observations. No final-test target, metric, prediction, visualization, or statistic may be opened before Session D.
 
 Screening uses three paired seeds. Confirmation uses seeds 42, 43, 44, 45, and 46 across all three folds. Seed 42 cannot serve as a gate by itself.
 
@@ -87,7 +87,7 @@ This is the selected route. It establishes the strongest same-budget local forec
 
 ### 5.3 Data-first hydrological enrichment
 
-This route adds dynamic flow, speed, event, regulation, and load information before further architecture work. It becomes the active route if the S4 upstream-signal gate fails. It is a contingency, not an excuse to continue architecture search on uninformative inputs.
+This route adds dynamic flow, speed, event, regulation, and load information before further architecture work. It becomes the active route if the Session B upstream-signal gate fails. It is a contingency, not an excuse to continue architecture search on uninformative inputs.
 
 ## 6. Model design
 
@@ -160,7 +160,7 @@ The reference machine is:
 - PyTorch 2.10.0 + CUDA 12.8 + Lightning 2.6.1;
 - BF16, Flash SDPA, and memory-efficient SDPA available.
 
-S2 performs 100–200-step throughput benchmarks without using validation metrics. It compares physical batches 4, 8, 16, 24, and 32; DataLoader workers 0, 4, 8, and 12; persistent workers; prefetch; pinned memory; BF16; TF32 high; fused AdamW; Flash SDPA; and optional `torch.compile`.
+Session A performs 100–200-step throughput benchmarks without using validation metrics. It compares physical batches 4, 8, 16, 24, and 32; DataLoader workers 0, 4, 8, and 12; persistent workers; prefetch; pinned memory; BF16; TF32 high; fused AdamW; Flash SDPA; and optional `torch.compile`.
 
 The selected profile targets:
 
@@ -193,11 +193,11 @@ Each model family receives at most 12 preregistered configurations. Search dimen
 - weight decay: 1e-5, 1e-4, 1e-3;
 - NSE auxiliary weight: 0.0, 0.05, 0.10.
 
-The search is a preregistered subset, not the Cartesian product. The exact 12 configurations are frozen in S5 before formal screening.
+The search is a preregistered subset, not the Cartesian product. The exact 12 configurations are frozen in Session B before formal screening.
 
 ## 10. Upstream-signal gate
 
-S4 freezes predictions from a strong local baseline and fits leak-free residual probes using training data only. Linear, small MLP, and tree probes compare correct travel-aligned upstream features against wrong direction, shuffled graph, and shuffled time.
+Session B freezes predictions from a strong local baseline and fits leak-free residual probes using training data only. Linear, small MLP, and tree probes compare correct travel-aligned upstream features against wrong direction, shuffled graph, and shuffled time.
 
 The analysis is stratified by target, lead band, upstream availability, flow/event state, and downstream depth.
 
@@ -225,7 +225,7 @@ Success requires all of the following:
 4. no target loses more than 0.01 mean NSE;
 5. directed graph beats shuffled, undirected, and no-lag controls;
 6. graph gain is concentrated in upstream-eligible nodes rather than headwaters;
-7. the test split remains unopened until S10.
+7. the test split remains unopened until Session D.
 
 The final test result is reported once and in full regardless of direction.
 
@@ -247,7 +247,7 @@ No plot may contain manually edited metrics.
 
 ## 13. Repository hygiene
 
-S1 removes safe generated artifacts: `.hydra/`, `build/`, egg-info, Python caches, pytest caches, root-level training logs, test runs, and smoke runs.
+Session A removes safe generated artifacts: `.hydra/`, `build/`, egg-info, Python caches, pytest caches, root-level training logs, test runs, and smoke runs.
 
 The repository must never use global `git clean -fdX`, because formal `data/` and `runs/` are ignored. Cleanup uses an explicit allowlist.
 
@@ -257,21 +257,16 @@ Formal data remains in place. `runs/` retains current baselines, promoted/final 
 
 ## 14. Cross-session program
 
-| Session | Deliverable | Gate |
-|---|---|---|
-| S0 | close the active v37 run, commit pending ledger/error records, create v0.2 branch | clean pushed branch and audited result |
-| S1 | safe generated-file cleanup and legacy retirement inventory | full pytest passes before and after safe cleanup |
-| S2 | Blackwell hardware benchmark and optimized trainer/data profile | hardware utilization targets met or measured limitation documented |
-| S3 | immutable data manifest, rolling folds, metric formula, GPU lock, budget runner | hash/split/leakage tests pass |
-| S4 | upstream residual-probe and event-stratified signal report | upstream-signal gate passes or route changes to data enrichment |
-| S5 | strong local backbone and frozen 12-config search set | stable three-fold, three-seed local baseline selected |
-| S6 | vectorized v0.2 propagation plus exact and capacity-matched controls | direction, lag, headwater, mask, BF16, and shape tests pass |
-| S7 | three-seed mechanism screening | promoted candidate is positive, stable, and <=3× runtime |
-| S8 | controlled counterfactual and ablation suite | directed topology and lag contribution attributable |
-| S9 | three-fold, five-seed confirmation and visualization | formal 15% decision produced without test access |
-| S10 | frozen retraining, one-time final test, final cleanup and v0.2 release | complete results, tests, docs, commit, and push |
+The program uses four main Codex sessions. Related engineering and experiments stay in the same session; context compaction and long-running commands are handled inside that session rather than creating a new session for every subtask.
 
-Only one formal GPU session runs at a time. Sequential sessions use the integration branch. Concurrent CPU/code work requires separate worktrees and task branches. Every session updates `docs/coordination/riverlagnet-v0.2-status.md`, commits, pushes, and stops before the next stage.
+| Session | Combined deliverable | Gate |
+|---|---|---|
+| A — engineering foundation and protocol | close the interrupted v37 run; preserve and commit pending records; create the v0.2 branch; safely clean generated files; inventory legacy retirement; benchmark Blackwell throughput; freeze the data manifest, rolling folds, metric formula, GPU lock, and budget runner | clean pushed branch; full pytest before/after cleanup; hardware profile selected; hash/split/leakage tests pass |
+| B — signal feasibility and strong local backbone | run upstream residual probes and event-stratified diagnostics; enrich data if the gate fails; implement and select the strong no-graph backbone; freeze the 12-configuration search set | signal gate passes on frozen data; stable three-fold, three-seed local baseline selected |
+| C — v0.2 graph model, screening, and ablation | implement vectorized directed conditional propagation plus exact and capacity-matched controls; run three-seed mechanism screening; profile runtime; run directed, shuffled, undirected, no-lag, and value-channel ablations | direction/lag/headwater/mask/BF16 tests pass; promoted candidate is stable, attributable, and no more than 3× runtime |
+| D — confirmation and release | run three-fold, five-seed confirmation; produce uncertainty and visualization package; make the formal 15% decision; freeze configuration; open the test split once; remove retired code and publish v0.2 | complete validation and test results, full pytest, final cleanup, documentation, commit, and push |
+
+Only one formal GPU session runs at a time. Sequential sessions use the integration branch. Concurrent CPU/code work requires separate worktrees and task branches. Every main session updates `docs/coordination/riverlagnet-v0.2-status.md`, commits, pushes, and stops before the next main session.
 
 ## 15. Risks and stop rules
 
@@ -285,4 +280,4 @@ Only one formal GPU session runs at a time. Sequential sessions use the integrat
 
 ## 16. Approved deliverables
 
-The next implementation-planning step must produce exact file-level, TDD-based tasks for S0–S10. Execution does not begin until this written design is reviewed and approved.
+The next implementation-planning step must produce exact file-level, TDD-based tasks for Sessions A–D. Execution does not begin until this revised written design is reviewed and approved.

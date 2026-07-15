@@ -20,7 +20,7 @@
 3. `docs/coordination/riverlagnet-v0.2-status.md`；
 4. 当前会话对应的实施计划任务。
 
-不同会话不得自行越过阶段门槛。只执行协调状态文件中分配给本会话的阶段。
+不同会话不得自行越过阶段门槛。只执行协调状态文件中分配给本会话的主阶段。一个主阶段内的相关子任务应连续完成，不为每个子任务新建会话。
 
 ------
 
@@ -54,7 +54,7 @@ T_out = 30 days
 data/processed/china-real-daily-contracted-1068-extended-v0.4/dataset.npz
 ```
 
-该数据在阶段 S3 完成 hash、节点、边、变量、时间覆盖和测试期封存审计后冻结。任何数据内容变化必须生成新版本并重新训练全部配对基线。
+该数据在会话 A 完成 hash、节点、边、变量、时间覆盖和测试期封存审计后冻结。任何数据内容变化必须生成新版本并重新训练全部配对基线。
 
 其他数据的用途：
 
@@ -347,13 +347,13 @@ docs/coordination/riverlagnet-v0.2-status.md
 
 每个会话必须：
 
-1. 只执行一个标记为 ready 的阶段；
+1. 只执行一个标记为 ready 的主阶段；
 2. 开始前检查 git status、远程分支、现有 GPU 进程和上一阶段证据；
 3. 完成后更新状态、commit、push；
 4. 报告 commit hash、测试、实验结果和未解决问题；
-5. 不自动开始下一个阶段。
+5. 不自动开始下一个主阶段。
 
-顺序执行会话可使用同一集成分支。若多个会话并发修改代码，必须使用独立 worktree 和任务分支；GPU 正式训练仍只能串行。
+顺序执行会话可使用同一集成分支。默认只使用四个主会话；上下文压缩或长时间训练不是预先拆分会话的理由。若多个会话并发修改代码，必须使用独立 worktree 和任务分支；GPU 正式训练仍只能串行。
 
 ------
 
@@ -385,20 +385,13 @@ chore: ...
 
 ## 17. 当前阶段
 
-不得继续执行旧 v0.1 的“从头构建项目”任务列表。当前工作严格按照协调状态文件中的 S0–S10 推进：
+不得继续执行旧 v0.1 的“从头构建项目”任务列表。当前工作严格按照协调状态文件中的四个主会话推进：
 
 ```text
-S0 current-run closure
-S1 repository hygiene
-S2 hardware optimization
-S3 protocol freeze
-S4 upstream signal gate
-S5 strong no-graph backbone
-S6 RiverLagNet v0.2 graph mechanism
-S7 mechanism screening
-S8 controlled ablations
-S9 five-seed confirmation and visualization
-S10 final freeze and one-time test
+Session A: engineering foundation and protocol
+Session B: signal feasibility and strong no-graph backbone
+Session C: RiverLagNet v0.2 implementation, screening, and ablation
+Session D: five-seed confirmation, visualization, final test, and release
 ```
 
 任何阶段未通过门槛时，先修复或记录 discard，不得通过降低门槛直接进入下一阶段。
