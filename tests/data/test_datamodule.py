@@ -119,6 +119,46 @@ def test_datamodule_rejects_unknown_scenario() -> None:
         RiverDataModule(scenario="unknown")
 
 
+def test_dataloader_propagates_worker_and_prefetch_controls() -> None:
+    module = RiverDataModule(
+        num_days=180,
+        num_nodes=5,
+        input_window=20,
+        output_window=10,
+        batch_size=4,
+        num_workers=1,
+        pin_memory=True,
+        persistent_workers=False,
+        prefetch_factor=3,
+    )
+    module.setup("fit")
+
+    loader = module.train_dataloader()
+
+    assert loader.num_workers == 1
+    assert loader.pin_memory is True
+    assert loader.persistent_workers is False
+    assert loader.prefetch_factor == 3
+
+
+def test_dataloader_omits_prefetch_when_workers_are_disabled() -> None:
+    module = RiverDataModule(
+        num_days=180,
+        input_window=20,
+        output_window=10,
+        num_workers=0,
+        persistent_workers=True,
+        prefetch_factor=4,
+    )
+    module.setup("fit")
+
+    loader = module.train_dataloader()
+
+    assert loader.num_workers == 0
+    assert loader.persistent_workers is False
+    assert loader.prefetch_factor is None
+
+
 def test_identifiable_hydra_config_has_fixed_window_contract() -> None:
     config_dir = Path(__file__).resolve().parents[2] / "configs"
     with initialize_config_dir(version_base="1.3", config_dir=str(config_dir)):

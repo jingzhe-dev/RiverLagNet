@@ -43,6 +43,11 @@ def _metric_float(metrics: dict[str, Any], name: str) -> float:
     return float(value.detach().cpu()) if isinstance(value, torch.Tensor) else float(value)
 
 
+def _set_matmul_precision(value: str) -> None:
+    """Apply the configured float32 matmul precision policy."""
+    torch.set_float32_matmul_precision(value)
+
+
 def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None:
     """Load a trusted local Lightning checkpoint before residual training."""
     if not checkpoint_path.is_file():
@@ -135,6 +140,7 @@ def _experiment_record(
 def run(cfg: DictConfig) -> dict[str, Any]:
     """Execute one configured Lightning training run."""
     seed_everything(int(cfg.seed), workers=True)
+    _set_matmul_precision(str(cfg.trainer.matmul_precision))
     data_kwargs = OmegaConf.to_container(cfg.data, resolve=True)
     assert isinstance(data_kwargs, dict)
     datamodule = RiverDataModule(**data_kwargs)
@@ -155,6 +161,7 @@ def run(cfg: DictConfig) -> dict[str, Any]:
         nse_aux_weight=float(cfg.trainer.nse_aux_weight),
         target_mean=datamodule.scaler.mean[:3].tolist(),
         target_scale=datamodule.scaler.scale[:3].tolist(),
+        fused_adamw=bool(cfg.trainer.fused_adamw),
     )
     if cfg.trainer.warm_start_checkpoint:
         _load_warm_start(module, Path(str(cfg.trainer.warm_start_checkpoint)))
@@ -191,7 +198,7 @@ def run(cfg: DictConfig) -> dict[str, Any]:
             )
         model.configure_lag_refinement_training()
     run_dir = Path(str(cfg.run_dir))
-    runtime = RuntimeStatsCallback()
+    runtime = RuntimeStatsCallback(output_path=run_dir / "hardware.json")
     callbacks = [runtime, LearningRateMonitor(logging_interval="epoch")]
     checkpoint = ModelCheckpoint(
         dirpath=run_dir / "checkpoints",

@@ -44,6 +44,8 @@ class RiverDataModule(LightningDataModule):
         batch_size: int = 16,
         num_workers: int = 0,
         pin_memory: bool = False,
+        persistent_workers: bool | None = None,
+        prefetch_factor: int | None = 2,
         seed: int = 42,
         scenario: str = "legacy",
         dataset_path: str | None = None,
@@ -153,12 +155,24 @@ class RiverDataModule(LightningDataModule):
         return self._loader(self.test_dataset, shuffle=False)
 
     def _loader(self, dataset: RiverWindowDataset, shuffle: bool) -> DataLoader:
+        num_workers = int(self.hparams.num_workers)
+        configured_persistence = self.hparams.persistent_workers
+        persistent_workers = num_workers > 0 and (
+            bool(configured_persistence)
+            if configured_persistence is not None
+            else True
+        )
+        loader_options = {
+            "dataset": dataset,
+            "batch_size": self.hparams.batch_size,
+            "shuffle": shuffle,
+            "num_workers": num_workers,
+            "collate_fn": river_collate,
+            "persistent_workers": persistent_workers,
+            "pin_memory": self.hparams.pin_memory,
+        }
+        if num_workers > 0 and self.hparams.prefetch_factor is not None:
+            loader_options["prefetch_factor"] = int(self.hparams.prefetch_factor)
         return DataLoader(
-            dataset,
-            batch_size=self.hparams.batch_size,
-            shuffle=shuffle,
-            num_workers=self.hparams.num_workers,
-            collate_fn=river_collate,
-            persistent_workers=self.hparams.num_workers > 0,
-            pin_memory=self.hparams.pin_memory,
+            **loader_options,
         )

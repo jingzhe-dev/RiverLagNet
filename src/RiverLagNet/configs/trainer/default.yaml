@@ -1,6 +1,8 @@
 accelerator: auto
 devices: 1
 precision: 16-mixed
+matmul_precision: high
+fused_adamw: false
 max_epochs: 50
 max_steps: -1
 effective_batch_size: ${data.batch_size}

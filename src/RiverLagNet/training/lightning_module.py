@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import inspect
 from typing import Any
 
 import torch
@@ -71,6 +72,7 @@ class RiverForecastModule(LightningModule):
         nse_aux_weight: float = 0.0,
         target_mean: Sequence[float] | None = None,
         target_scale: Sequence[float] | None = None,
+        fused_adamw: bool = False,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
@@ -150,8 +152,20 @@ class RiverForecastModule(LightningModule):
         self._log_epoch_metrics("test")
 
     def configure_optimizers(self) -> dict[str, Any]:
+        parameter = next(self.parameters())
+        use_fused = (
+            bool(self.hparams.fused_adamw)
+            and parameter.device.type == "cuda"
+            and "fused" in inspect.signature(torch.optim.AdamW).parameters
+        )
+        optimizer_options: dict[str, Any] = {}
+        if "fused" in inspect.signature(torch.optim.AdamW).parameters:
+            optimizer_options["fused"] = use_fused
         optimizer = torch.optim.AdamW(
-            self.parameters(), lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay
+            self.parameters(),
+            lr=self.hparams.learning_rate,
+            weight_decay=self.hparams.weight_decay,
+            **optimizer_options,
         )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="max", factor=0.5, patience=3

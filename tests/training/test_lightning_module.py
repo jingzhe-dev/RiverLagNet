@@ -38,3 +38,21 @@ def test_logged_metrics_are_restored_to_physical_target_units() -> None:
     assert torch.allclose(logged["val_mae_NH3N"], torch.tensor(2.0))
     assert torch.allclose(logged["val_mae_CODMn"], torch.tensor(3.0))
     assert torch.allclose(logged["val_mae_TP"], torch.tensor(4.0))
+
+
+def test_fused_adamw_request_falls_back_for_cpu_parameters() -> None:
+    data = RiverDataModule(num_days=180, num_nodes=4, input_window=20, output_window=10)
+    data.setup("fit")
+    model = build_model("station_gru", data.data_spec, output_window=10, hidden_dim=8)
+    module = RiverForecastModule(
+        model,
+        learning_rate=6e-4,
+        weight_decay=1e-3,
+        fused_adamw=True,
+    )
+
+    optimizer = module.configure_optimizers()["optimizer"]
+
+    assert optimizer.defaults["lr"] == 6e-4
+    assert optimizer.defaults["weight_decay"] == 1e-3
+    assert optimizer.defaults.get("fused") is not True
