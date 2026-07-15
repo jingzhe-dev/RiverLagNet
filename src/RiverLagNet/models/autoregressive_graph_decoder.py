@@ -35,6 +35,7 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         max_path_hops: int = 8,
         prior_scale_days: float = 2.0,
         max_dynamic_shift_days: float = 2.0,
+        value_mode: str = "state",
     ) -> None:
         super().__init__()
         if hidden_dim <= 0 or hidden_dim % num_heads:
@@ -43,12 +44,15 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
             raise ValueError("edge_dim, max_lag, and max_path_hops must be positive")
         if prior_scale_days <= 0 or max_dynamic_shift_days < 0:
             raise ValueError("prior scale must be positive and dynamic shift non-negative")
+        if value_mode not in {"state", "innovation"}:
+            raise ValueError("value_mode must be state or innovation")
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.head_dim = hidden_dim // num_heads
         self.max_lag = max_lag
         self.max_path_hops = max_path_hops
         self.max_dynamic_shift_days = max_dynamic_shift_days
+        self.value_mode = value_mode
 
         self.query_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
@@ -115,7 +119,10 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
             self.num_heads,
             self.head_dim,
         )
-        candidate_values = self.value_projection(candidate_states).view(
+        message_states = self._message_states(
+            candidate_states, destination_query, destination
+        )
+        candidate_values = self.value_projection(message_states).view(
             batch,
             edges,
             self.max_lag,
@@ -165,6 +172,17 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         return self._normalize_and_aggregate(
             scores, candidate_values, destination, nodes
         )
+
+    def _message_states(
+        self,
+        candidate_states: Tensor,
+        destination_query: Tensor,
+        destination: Tensor,
+    ) -> Tensor:
+        """Return absolute upstream states or destination-relative innovations."""
+        if self.value_mode == "state":
+            return candidate_states
+        return candidate_states - destination_query[:, destination, None]
 
     def _candidate_states(
         self,
@@ -369,6 +387,7 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
         dropout: float = 0.1,
         prior_scale_days: float = 2.0,
         max_dynamic_shift_days: float = 2.0,
+        attention_value_mode: str = "state",
     ) -> None:
         super().__init__()
         if output_window <= 0 or target_dim <= 0:
@@ -394,6 +413,7 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
             max_path_hops=max_path_hops,
             prior_scale_days=prior_scale_days,
             max_dynamic_shift_days=max_dynamic_shift_days,
+            value_mode=attention_value_mode,
         )
         self.fusion = GraphModulatedRecurrentFusion(hidden_dim, num_heads)
         self.output_shared = nn.Sequential(

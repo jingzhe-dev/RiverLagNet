@@ -277,6 +277,20 @@ two concrete weaknesses: fixed travel-time alignment under state-dependent
 transport, and the inability of late attention to route already-predicted
 upstream states through the future trajectory.
 
+The `attention_value_mode=innovation` extension addresses the measured
+over-correction of absolute upstream states. Attention keys still use the
+physical upstream state for routing, but the transported value is
+
+```text
+V_ijh,tau = W_v (s_j(h,tau) - L_i,h).
+```
+
+Subtracting the destination's current local state removes common regional
+background already represented by the Transformer. The GNN therefore carries
+an upstream innovation rather than duplicating the local level. This change is
+tested by `model=river_crossformer_recurrent_innovation`; it remains a routing
+and prediction mechanism, not a causal-effect estimator.
+
 ### Innovation 4: Graph-Modulated Recurrent Fusion (GMRF)
 
 **Problem.** A serial `Transformer -> GNN -> additive output residual` asks a

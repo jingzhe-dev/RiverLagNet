@@ -33,6 +33,11 @@ required. The graph projection is zero-started and headwaters stay exactly
 local; formal gains must still be established on validation data before any
 15% claim is made.
 
+`model=river_crossformer_recurrent_innovation` keeps the same RCELA routing
+scores but transports `upstream_state - downstream_local_state` as the GNN
+value. This removes common background already encoded locally and directly
+targets the observed over-correction of absolute upstream states.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

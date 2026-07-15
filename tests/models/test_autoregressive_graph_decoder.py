@@ -72,6 +72,29 @@ def test_recursive_attention_jointly_normalizes_incoming_edges_and_lags() -> Non
         assert torch.allclose(total, torch.ones_like(total), atol=1e-6)
 
 
+def test_innovation_values_remove_destination_background_state() -> None:
+    attention = RecursiveCausalEdgeLagAttention(
+        hidden_dim=4,
+        edge_dim=2,
+        num_heads=2,
+        max_lag=3,
+        max_path_hops=2,
+        value_mode="innovation",
+    )
+    candidates = torch.arange(24, dtype=torch.float32).reshape(1, 2, 3, 4)
+    destination_query = torch.tensor(
+        [[[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]]]
+    )
+    destination = torch.tensor([1, 2])
+
+    messages = attention._message_states(
+        candidates, destination_query, destination
+    )
+
+    expected = candidates - destination_query[:, destination, None]
+    assert torch.equal(messages, expected)
+
+
 def _decoder() -> DirectedAutoregressiveGraphDecoder:
     return DirectedAutoregressiveGraphDecoder(
         hidden_dim=8,

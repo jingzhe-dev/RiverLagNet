@@ -74,6 +74,7 @@ class RiverGraphCrossFormer(nn.Module):
         dropout: float = 0.1,
         lag_prior_scale_days: float = 2.0,
         max_dynamic_shift_days: float = 2.0,
+        attention_value_mode: str = "state",
         **_: object,
     ) -> None:
         super().__init__()
@@ -134,6 +135,7 @@ class RiverGraphCrossFormer(nn.Module):
                 dropout=dropout,
                 prior_scale_days=lag_prior_scale_days,
                 max_dynamic_shift_days=max_dynamic_shift_days,
+                attention_value_mode=attention_value_mode,
             )
             if fusion_mode == "recurrent"
             else None
