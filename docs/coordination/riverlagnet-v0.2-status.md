@@ -3,6 +3,10 @@
 ## Source of truth
 
 - Design: `docs/superpowers/specs/2026-07-15-riverlagnet-v0.2-design.md`
+- Session A plan: `docs/superpowers/plans/2026-07-15-riverlagnet-v0.2-session-a-foundation.md`
+- Session B plan: `docs/superpowers/plans/2026-07-15-riverlagnet-v0.2-session-b-signal-local.md`
+- Session C plan: `docs/superpowers/plans/2026-07-15-riverlagnet-v0.2-session-c-graph.md`
+- Session D plan: `docs/superpowers/plans/2026-07-15-riverlagnet-v0.2-session-d-confirm-release.md`
 - Agent rules: `AGENTS.md`
 - Current integration branch before Session A: `research/20260714-graph-15pct`
 - Planned v0.2 integration branch after Session A: `research/20260715-riverlagnet-v02`
@@ -20,6 +24,8 @@ blocked     a documented external condition prevents progress
 ```
 
 Only the coordinator changes a main session from `waiting` to `ready`. A worker changes only its assigned main session from `ready` to `in_progress` and then to `complete`, or reports a blocker without starting a later session.
+
+The four plans are deliberately self-contained. One Codex task owns one main session and completes all of its internal tasks sequentially; internal tasks must not be split into extra user-facing Codex tasks.
 
 ## Current observation
 
