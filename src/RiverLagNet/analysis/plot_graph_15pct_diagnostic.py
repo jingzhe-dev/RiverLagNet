@@ -24,6 +24,7 @@ GRID_COLOR = "#DCE4E7"
 RIVER_COLOR = "#4A8292"
 BEST_COLOR = "#176B79"
 ADAPTIVE_COLOR = "#72A69A"
+COUNTERFACTUAL_COLOR = "#4F8797"
 NEGATIVE_COLOR = "#B8756D"
 TARGET_COLOR = "#9B3E46"
 NH3N_COLOR = "#2F7183"
@@ -104,12 +105,18 @@ def _plot_model_gain(axis: plt.Axes, payload: dict[str, object]) -> None:
     ordered = [
         rows["RCELA + GMRF fixed innovation"],
         rows["RCELA + GMRF adaptive DCUV"],
+        rows["RCELA + GMRF counterfactual CLGF"],
         rows["RCELA + GMRF absolute state"],
     ]
-    labels = ["Fixed innovation", "Adaptive DCUV", "Absolute state (best)"]
-    colors = [NEGATIVE_COLOR, ADAPTIVE_COLOR, BEST_COLOR]
+    labels = [
+        "Fixed innovation",
+        "Adaptive DCUV",
+        "Counterfactual CLGF",
+        "Absolute state (best)",
+    ]
+    colors = [NEGATIVE_COLOR, ADAPTIVE_COLOR, COUNTERFACTUAL_COLOR, BEST_COLOR]
     gains = np.asarray([float(row["relative_gain_percent"]) for row in ordered])
-    positions = np.arange(3)
+    positions = np.arange(4)
     bars = axis.barh(
         positions,
         gains,

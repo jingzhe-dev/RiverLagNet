@@ -64,6 +64,8 @@
 
 零起点 Dual-Component Upstream Values（DCUV）保留绝对状态投影，并学习额外的 `upstream_state - downstream_local_state` 投影。正式验证 macro NSE 为 `0.592391`，相对无图提升 `0.535%`，优于固定 innovation，但低于绝对状态 RCELA 的 `0.595144`，因此同样 discard。DCUV 对 NH3N、CODMn、TP 的 NSE 变化分别为 `+0.008124`、`+0.004953`、`-0.003618`；训练期拟合的全局最优图修正缩放仅为 `0.536`，表明自适应通道仍产生偏强修正，并且损害了 TP。测试集仍未使用。
 
+Counterfactual Local–Graph Fusion（CLGF）同时运行本地 Transformer 与 RCELA + GMRF 递归，并用目标×提前期门融合两者差值。正式验证 macro NSE 为 `0.592947`，相对无图提升 `0.629%`，仍低于绝对状态 RCELA，因此 discard。其 NH3N、CODMn、TP NSE 分别为 `0.542557`、`0.899938`、`0.336344`。90 个门的总体均值为 `0.521`，TP 均值仍为 `0.503`；共享图支路能够调整内部修正幅度来抵消输出门，使门没有形成预期的目标选择性。该结果表明继续增加输出融合门不能解决 15% 目标，下一步转向随水文状态变化的动态旅行时间 attention。测试集仍未使用。
+
 ## 可复现产物
 
 - 完整诊断：[graph_15pct_diagnostic_2026-07-14.md](graph_15pct_diagnostic_2026-07-14.md)

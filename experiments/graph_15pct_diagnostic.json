@@ -108,6 +108,13 @@
           "CODMn": 0.004953145980834961,
           "TP": -0.0036177635192871094
         }
+      },
+      {
+        "name": "RCELA + GMRF counterfactual CLGF",
+        "experiment": "realmain61ext_rcela_v34_clgf_s42_directed",
+        "macro_nse": 0.5929466485977173,
+        "relative_gain_percent": 0.6294706955434712,
+        "decision": "discard_below_absolute_state"
       }
     ]
   },
