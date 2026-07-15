@@ -95,6 +95,72 @@ def test_innovation_values_remove_destination_background_state() -> None:
     assert torch.equal(messages, expected)
 
 
+def test_adaptive_values_zero_start_at_exact_absolute_state_values() -> None:
+    torch.manual_seed(11)
+    state_attention = RecursiveCausalEdgeLagAttention(
+        hidden_dim=4,
+        edge_dim=2,
+        num_heads=2,
+        max_lag=3,
+        max_path_hops=2,
+        value_mode="state",
+    )
+    adaptive_attention = RecursiveCausalEdgeLagAttention(
+        hidden_dim=4,
+        edge_dim=2,
+        num_heads=2,
+        max_lag=3,
+        max_path_hops=2,
+        value_mode="adaptive",
+    )
+    incompatible = adaptive_attention.load_state_dict(
+        state_attention.state_dict(), strict=False
+    )
+    assert incompatible.missing_keys == ["innovation_projection"]
+    assert incompatible.unexpected_keys == []
+    candidates = torch.randn(2, 2, 3, 4)
+    destination_query = torch.randn(2, 3, 4)
+    destination = torch.tensor([1, 2])
+
+    state_values = state_attention._project_message_values(
+        candidates, destination_query, destination
+    )
+    adaptive_values = adaptive_attention._project_message_values(
+        candidates, destination_query, destination
+    )
+
+    assert torch.equal(adaptive_values, state_values)
+
+
+def test_adaptive_values_learn_absolute_and_relative_components() -> None:
+    attention = RecursiveCausalEdgeLagAttention(
+        hidden_dim=4,
+        edge_dim=2,
+        num_heads=2,
+        max_lag=3,
+        max_path_hops=2,
+        value_mode="adaptive",
+    )
+    candidates = torch.arange(24, dtype=torch.float32).reshape(1, 2, 3, 4)
+    destination_query = torch.tensor(
+        [[[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]]]
+    )
+    destination = torch.tensor([1, 2])
+    with torch.no_grad():
+        attention.value_projection.weight.copy_(torch.eye(4))
+        assert attention.innovation_projection is not None
+        attention.innovation_projection.copy_(2.0 * torch.eye(4))
+
+    values = attention._project_message_values(
+        candidates, destination_query, destination
+    )
+
+    expected = candidates + 2.0 * (
+        candidates - destination_query[:, destination, None]
+    )
+    assert torch.equal(values, expected)
+
+
 def _decoder() -> DirectedAutoregressiveGraphDecoder:
     return DirectedAutoregressiveGraphDecoder(
         hidden_dim=8,

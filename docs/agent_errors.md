@@ -110,3 +110,5 @@
 - 2026-07-15｜RCELA 无图正式训练完成 early stopping 后在 Rich 进度条 teardown 因 GBK 无法编码项目符号而记为 crash｜正式命令遗漏了已在 smoke 中使用的禁用进度条覆盖，Windows 旧控制台在结束渲染时触发编码错误｜保留自动 crash 账本和 checkpoint，以相同确定性配置在 `enable_progress_bar=false` 下重新训练并自动登记｜Windows 正式训练命令固定关闭 Rich 进度条，不能只在 smoke 命令中使用
 - 2026-07-15｜为规避 Rich 输出编码而设置 `PYTHONUTF8=1` 后 Python 在导入 site 阶段失败｜DeepWater 环境存在本地编码的 `.pth`，全局 UTF-8 模式错误地改变了环境文件解码方式｜撤销全局 UTF-8，仅关闭 Rich 进度条并用 `PYTHONIOENCODING` 控制标准流｜现有 Conda 环境不能假设所有元数据均为 UTF-8，控制台编码修复不得改变文件系统默认解码
 - 2026-07-15｜纯 innovation 正式训练的执行单元在 3600 秒超时后误判 Python 训练进程已终止｜只看到外层 PowerShell 超时，未先检查其 DeepWater 子进程仍在 GPU 上运行｜核对 PID、GPU 与 metrics 后取消恢复计划，仅轮询原进程直至其正常 early stopping 和自动记账｜长训练超时必须高于最坏 early-stopping 时长，外层超时后先查子进程再判断是否恢复，禁止直接重复启动
+- 2026-07-15｜DCUV 首次组合补丁因架构文档锚点与实际文本不一致而整体未应用｜依据压缩摘要猜测文档原句，没有先读取对应段落｜读取真实上下文后拆分代码与文档补丁并重新应用｜跨代码和文档的大补丁必须先核对每个文件的精确锚点，避免一个非关键锚点回滚全部修改
+- 2026-07-15｜DCUV 真实数据 fast-dev 首次启动在 Hydra 解析绝对 `run_dir` 时失败｜把含 Windows 盘符和中文目录的未转义绝对路径直接作为 override 值｜确认训练未开始且测试目录已清理，改用仓库内相对运行目录重试｜Hydra 路径覆盖优先使用相对路径，正式启动前避免把带冒号的 Windows 绝对路径作为裸值

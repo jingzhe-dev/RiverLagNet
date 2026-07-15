@@ -38,6 +38,12 @@ scores but transports `upstream_state - downstream_local_state` as the GNN
 value. This removes common background already encoded locally and directly
 targets the observed over-correction of absolute upstream states.
 
+`model=river_crossformer_recurrent_adaptive` implements **Dual-Component
+Upstream Values (DCUV)**. It retains the stronger absolute upstream value and
+adds a zero-initialized, learnable upstream-minus-destination correction. The
+new model is therefore exactly nested in the absolute-state RCELA at
+initialization instead of committing to a fixed differencing assumption.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

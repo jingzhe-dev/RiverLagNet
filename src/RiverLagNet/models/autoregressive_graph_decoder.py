@@ -44,8 +44,8 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
             raise ValueError("edge_dim, max_lag, and max_path_hops must be positive")
         if prior_scale_days <= 0 or max_dynamic_shift_days < 0:
             raise ValueError("prior scale must be positive and dynamic shift non-negative")
-        if value_mode not in {"state", "innovation"}:
-            raise ValueError("value_mode must be state or innovation")
+        if value_mode not in {"state", "innovation", "adaptive"}:
+            raise ValueError("value_mode must be state, innovation, or adaptive")
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
         self.head_dim = hidden_dim // num_heads
@@ -57,6 +57,11 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         self.query_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.value_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
+        self.innovation_projection = (
+            nn.Parameter(torch.zeros(hidden_dim, hidden_dim))
+            if value_mode == "adaptive"
+            else None
+        )
         self.edge_key = nn.Linear(edge_dim, hidden_dim, bias=False)
         self.edge_bias = nn.Linear(edge_dim, num_heads, bias=False)
         self.lag_shift = nn.Linear(hidden_dim, num_heads, bias=False)
@@ -119,10 +124,10 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
             self.num_heads,
             self.head_dim,
         )
-        message_states = self._message_states(
+        projected_values = self._project_message_values(
             candidate_states, destination_query, destination
         )
-        candidate_values = self.value_projection(message_states).view(
+        candidate_values = projected_values.view(
             batch,
             edges,
             self.max_lag,
@@ -183,6 +188,28 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
         if self.value_mode == "state":
             return candidate_states
         return candidate_states - destination_query[:, destination, None]
+
+    def _project_message_values(
+        self,
+        candidate_states: Tensor,
+        destination_query: Tensor,
+        destination: Tensor,
+    ) -> Tensor:
+        """Project absolute state and an optional zero-start innovation channel."""
+        if self.value_mode != "adaptive":
+            return self.value_projection(
+                self._message_states(
+                    candidate_states, destination_query, destination
+                )
+            )
+        innovation = (
+            candidate_states - destination_query[:, destination, None]
+        )
+        if self.innovation_projection is None:
+            raise RuntimeError("adaptive value mode requires an innovation projection")
+        return self.value_projection(candidate_states) + F.linear(
+            innovation, self.innovation_projection
+        )
 
     def _candidate_states(
         self,

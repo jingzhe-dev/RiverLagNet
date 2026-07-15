@@ -291,6 +291,22 @@ an upstream innovation rather than duplicating the local level. This change is
 tested by `model=river_crossformer_recurrent_innovation`; it remains a routing
 and prediction mechanism, not a causal-effect estimator.
 
+The fixed innovation ablation loses useful upstream concentration levels in
+formal validation. `model=river_crossformer_recurrent_adaptive` therefore uses
+**Dual-Component Upstream Values (DCUV)**:
+
+```text
+V_ij,tau = W_state h_j,t-tau
+         + W_innovation (h_j,t-tau - h_i,t)
+```
+
+`W_innovation` is initialized to exactly zero. DCUV starts at the stronger
+absolute-state RCELA solution and learns destination-relative transport
+anomalies only when the training objective supports them. It directly resolves
+the measured trade-off: absolute values can over-correct shared basin
+background, while fixed innovations discard useful upstream water-quality
+levels.
+
 ### Innovation 4: Graph-Modulated Recurrent Fusion (GMRF)
 
 **Problem.** A serial `Transformer -> GNN -> additive output residual` asks a
