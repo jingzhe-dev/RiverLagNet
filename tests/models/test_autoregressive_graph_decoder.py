@@ -5,6 +5,7 @@ import torch
 
 from RiverLagNet.models.autoregressive_graph_decoder import (
     DirectedAutoregressiveGraphDecoder,
+    FixedDirectEdgeLagRouting,
     RecursiveCausalEdgeLagAttention,
 )
 
@@ -211,6 +212,81 @@ def test_hydrology_scaling_converts_state_to_speed_ratio() -> None:
 
     assert torch.all(centers[..., 0] < 8.0)
     assert torch.equal(centers[..., 1], torch.full_like(centers[..., 1], 8.0))
+
+
+def test_fixed_direct_routing_uses_one_physical_lag_per_edge() -> None:
+    routing = FixedDirectEdgeLagRouting(
+        hidden_dim=4, edge_dim=2, num_heads=2, max_lag=4
+    )
+    history = torch.zeros(1, 5, 3, 4)
+    future = torch.zeros(1, 2, 3, 4)
+    for time in range(5):
+        for node in range(3):
+            history[:, time, node] = 100 * time + node
+    for lead in range(2):
+        for node in range(3):
+            future[:, lead, node] = 1000 + 100 * lead + node
+    source = torch.tensor([0, 1])
+    edge_attr = torch.tensor([[0.2, 3.0], [0.3, 1.0]])
+
+    candidates = routing.aligned_source_states(
+        history, future, source, edge_attr
+    )
+
+    assert torch.equal(candidates[0, 0], history[0, -1, 0])
+    assert torch.equal(candidates[0, 1], future[0, 1, 1])
+
+
+def test_fixed_direct_routing_normalizes_only_incoming_edges() -> None:
+    torch.manual_seed(19)
+    routing = FixedDirectEdgeLagRouting(
+        hidden_dim=8, edge_dim=2, num_heads=2, max_lag=4
+    )
+    history = torch.randn(2, 5, 3, 8)
+    query = torch.randn(2, 3, 8)
+    edge_index = torch.tensor([[0, 1], [2, 2]])
+    edge_attr = torch.tensor([[0.2, 1.0], [0.3, 2.0]])
+
+    contexts, weights = routing(
+        history,
+        history.new_empty(2, 0, 3, 8),
+        query,
+        edge_index,
+        edge_attr,
+    )
+
+    assert contexts.shape == (2, 3, 2, 4)
+    assert weights.shape == (2, 2, 1, 2)
+    assert torch.equal(contexts[:, :2], torch.zeros_like(contexts[:, :2]))
+    assert torch.allclose(
+        weights.sum(dim=(1, 2)), torch.ones(2, 2), atol=1e-6
+    )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")
+def test_fixed_direct_routing_supports_cuda_bfloat16_autocast() -> None:
+    routing = FixedDirectEdgeLagRouting(
+        hidden_dim=8, edge_dim=2, num_heads=2, max_lag=4
+    ).cuda()
+    history = torch.randn(2, 5, 3, 8, device="cuda")
+    query = torch.randn(2, 3, 8, device="cuda")
+    edge_index = torch.tensor([[0, 1], [2, 2]], device="cuda")
+    edge_attr = torch.tensor(
+        [[0.2, 1.0], [0.3, 2.0]], device="cuda", dtype=torch.float32
+    )
+
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        contexts, weights = routing(
+            history,
+            history.new_empty(2, 0, 3, 8),
+            query,
+            edge_index,
+            edge_attr,
+        )
+
+    assert contexts.dtype == torch.bfloat16
+    assert torch.isfinite(contexts).all()
+    assert torch.isfinite(weights).all()
 
 
 def _decoder() -> DirectedAutoregressiveGraphDecoder:

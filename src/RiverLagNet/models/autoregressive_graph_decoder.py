@@ -405,6 +405,161 @@ class RecursiveCausalEdgeLagAttention(nn.Module):
             raise ValueError("edge_attr must have shape [E,A]")
 
 
+class FixedDirectEdgeLagRouting(nn.Module):
+    """Route one physically aligned state per direct upstream edge.
+
+    Unlike RCELA, this operator does not search over every ancestor-lag pair.
+    Each direct edge reads exactly ``round(travel_time_prior_days)`` days back
+    from observed history or an already generated forecast state. Attention is
+    normalized only across direct incoming edges for a destination and head.
+    """
+
+    def __init__(
+        self,
+        hidden_dim: int,
+        edge_dim: int,
+        num_heads: int = 4,
+        max_lag: int = 30,
+    ) -> None:
+        super().__init__()
+        if hidden_dim <= 0 or hidden_dim % num_heads:
+            raise ValueError("hidden_dim must be positive and divisible by num_heads")
+        if edge_dim <= 0 or max_lag <= 0:
+            raise ValueError("edge_dim and max_lag must be positive")
+        self.hidden_dim = hidden_dim
+        self.num_heads = num_heads
+        self.head_dim = hidden_dim // num_heads
+        self.max_lag = max_lag
+        self.query_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
+        self.key_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
+        self.value_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
+        self.relative_projection = nn.Linear(hidden_dim, hidden_dim, bias=False)
+        self.edge_key = nn.Linear(edge_dim, hidden_dim, bias=False)
+        self.edge_value = nn.Linear(edge_dim, hidden_dim, bias=False)
+        self.edge_bias = nn.Linear(edge_dim, num_heads, bias=False)
+
+    def forward(
+        self,
+        history_states: Tensor,
+        future_states: Tensor,
+        destination_query: Tensor,
+        edge_index: Tensor,
+        edge_attr: Tensor,
+        edge_hops: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        """Return contexts ``[B,N,R,d]`` and weights ``[B,E,1,R]``."""
+        del edge_hops
+        self._validate(
+            history_states,
+            future_states,
+            destination_query,
+            edge_index,
+            edge_attr,
+        )
+        batch, _, nodes, _ = history_states.shape
+        edges = edge_index.shape[1]
+        if edges == 0:
+            return (
+                history_states.new_zeros(
+                    batch, nodes, self.num_heads, self.head_dim
+                ),
+                history_states.new_zeros(batch, 0, 1, self.num_heads),
+            )
+        source, destination = edge_index
+        candidates = self.aligned_source_states(
+            history_states, future_states, source, edge_attr
+        )
+        queries = self.query_projection(destination_query).view(
+            batch, nodes, self.num_heads, self.head_dim
+        )
+        keys = (
+            self.key_projection(candidates) + self.edge_key(edge_attr)[None]
+        ).view(batch, edges, self.num_heads, self.head_dim)
+        relative = candidates - destination_query[:, destination]
+        values = (
+            self.value_projection(candidates)
+            + self.relative_projection(relative)
+            + self.edge_value(edge_attr)[None]
+        ).view(batch, edges, self.num_heads, self.head_dim)
+        scores = (
+            queries[:, destination] * keys
+        ).sum(dim=-1) / math.sqrt(self.head_dim)
+        scores = scores + self.edge_bias(edge_attr)[None]
+        weights = self._incoming_softmax(scores, destination, nodes)
+        contexts = values.new_zeros(
+            batch, nodes, self.num_heads, self.head_dim
+        )
+        messages = (weights.to(values.dtype)[..., None] * values).to(
+            contexts.dtype
+        )
+        contexts.index_add_(1, destination, messages)
+        return contexts, weights[:, :, None]
+
+    def aligned_source_states(
+        self,
+        history_states: Tensor,
+        future_states: Tensor,
+        source: Tensor,
+        edge_attr: Tensor,
+    ) -> Tensor:
+        """Return the single causal travel-time state for each direct edge."""
+        history = history_states.shape[1]
+        previous_leads = future_states.shape[1]
+        lead = previous_leads + 1
+        lag = edge_attr[:, -1].round().long().clamp(1, self.max_lag)
+        relative_lead = lead - lag
+        history_index = (history - 1 + relative_lead).clamp(0, history - 1)
+        future_index = (relative_lead - 1).clamp(0, max(previous_leads - 1, 0))
+        observed = history_states[:, history_index, source]
+        if previous_leads == 0:
+            return observed
+        predicted = future_states[:, future_index, source]
+        return torch.where(
+            (relative_lead > 0)[None, :, None], predicted, observed
+        )
+
+    @staticmethod
+    def _incoming_softmax(
+        scores: Tensor, destination: Tensor, nodes: int
+    ) -> Tensor:
+        """Normalize edge scores over incoming edges for each node and head."""
+        batch, edges, heads = scores.shape
+        index = destination[None, :, None].expand(batch, edges, heads)
+        maxima = scores.new_full((batch, nodes, heads), -torch.inf)
+        maxima.scatter_reduce_(1, index, scores, reduce="amax", include_self=True)
+        stabilized = scores - maxima.gather(1, index)
+        numerator = stabilized.exp()
+        denominator = scores.new_zeros(batch, nodes, heads)
+        denominator.scatter_add_(1, index, numerator)
+        return numerator / denominator.gather(1, index).clamp_min(1e-8)
+
+    def _validate(
+        self,
+        history_states: Tensor,
+        future_states: Tensor,
+        destination_query: Tensor,
+        edge_index: Tensor,
+        edge_attr: Tensor,
+    ) -> None:
+        if history_states.ndim != 4:
+            raise ValueError("history_states must have shape [B,T,N,D]")
+        batch, _, nodes, hidden = history_states.shape
+        if hidden != self.hidden_dim:
+            raise ValueError("history hidden dimension mismatch")
+        if future_states.ndim != 4 or future_states.shape[0] != batch:
+            raise ValueError("future_states must have shape [B,H,N,D]")
+        if future_states.shape[2:] != (nodes, hidden):
+            raise ValueError("future state shape mismatch")
+        if destination_query.shape != (batch, nodes, hidden):
+            raise ValueError("destination query shape mismatch")
+        if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+            raise ValueError("edge_index must have shape [2,E]")
+        if edge_attr.ndim != 2 or edge_attr.shape[0] != edge_index.shape[1]:
+            raise ValueError("edge_attr must have shape [E,A]")
+        if edge_attr.shape[1] == 0:
+            raise ValueError("edge_attr must include travel time")
+
+
 class GraphModulatedRecurrentFusion(nn.Module):
     """Inject GNN messages inside a Transformer-state transition.
 
@@ -476,16 +631,20 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
         counterfactual_output_fusion: bool = False,
         travel_time_mode: str = "shift",
         max_speed_ratio: float = 4.0,
+        routing_mode: str = "attention",
     ) -> None:
         super().__init__()
         if output_window <= 0 or target_dim <= 0:
             raise ValueError("output_window and target_dim must be positive")
+        if routing_mode not in {"attention", "fixed_direct"}:
+            raise ValueError("routing_mode must be attention or fixed_direct")
         self.hidden_dim = hidden_dim
         self.output_window = output_window
         self.target_dim = target_dim
         self.num_heads = num_heads
         self.max_lag = max_lag
         self.counterfactual_output_fusion = counterfactual_output_fusion
+        self.routing_mode = routing_mode
         self.horizon_embedding = nn.Parameter(
             torch.empty(output_window, hidden_dim)
         )
@@ -494,17 +653,26 @@ class DirectedAutoregressiveGraphDecoder(nn.Module):
         self.local_transition = nn.GRUCell(hidden_dim, hidden_dim)
         self.local_norm = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(dropout)
-        self.attention = RecursiveCausalEdgeLagAttention(
-            hidden_dim,
-            edge_dim,
-            num_heads=num_heads,
-            max_lag=max_lag,
-            max_path_hops=max_path_hops,
-            prior_scale_days=prior_scale_days,
-            max_dynamic_shift_days=max_dynamic_shift_days,
-            value_mode=attention_value_mode,
-            travel_time_mode=travel_time_mode,
-            max_speed_ratio=max_speed_ratio,
+        self.attention = (
+            FixedDirectEdgeLagRouting(
+                hidden_dim,
+                edge_dim,
+                num_heads=num_heads,
+                max_lag=max_lag,
+            )
+            if routing_mode == "fixed_direct"
+            else RecursiveCausalEdgeLagAttention(
+                hidden_dim,
+                edge_dim,
+                num_heads=num_heads,
+                max_lag=max_lag,
+                max_path_hops=max_path_hops,
+                prior_scale_days=prior_scale_days,
+                max_dynamic_shift_days=max_dynamic_shift_days,
+                value_mode=attention_value_mode,
+                travel_time_mode=travel_time_mode,
+                max_speed_ratio=max_speed_ratio,
+            )
         )
         self.fusion = GraphModulatedRecurrentFusion(hidden_dim, num_heads)
         self.output_shared = nn.Sequential(

@@ -78,6 +78,8 @@ class RiverGraphCrossFormer(nn.Module):
         counterfactual_output_fusion: bool = False,
         travel_time_mode: str = "shift",
         max_speed_ratio: float = 4.0,
+        recurrent_routing_mode: str = "attention",
+        recurrent_history_graph: bool = False,
         **_: object,
     ) -> None:
         super().__init__()
@@ -93,6 +95,8 @@ class RiverGraphCrossFormer(nn.Module):
         self.max_path_hops = max_path_hops
         self.use_target_transport = use_target_transport
         self.fusion_mode = fusion_mode
+        self.recurrent_routing_mode = recurrent_routing_mode
+        self.recurrent_history_graph = recurrent_history_graph
         self.target_dim = target_dim
         self.input_encoder = InputMaskEncoder(
             value_dim, static_dim, time_dim, hidden_dim
@@ -142,6 +146,7 @@ class RiverGraphCrossFormer(nn.Module):
                 counterfactual_output_fusion=counterfactual_output_fusion,
                 travel_time_mode=travel_time_mode,
                 max_speed_ratio=max_speed_ratio,
+                routing_mode=recurrent_routing_mode,
             )
             if fusion_mode == "recurrent"
             else None
@@ -227,8 +232,13 @@ class RiverGraphCrossFormer(nn.Module):
                 edge_index, edge_attr, self.graph_variant, self.graph_seed
             )
             if self.fusion_mode == "recurrent":
-                graph_encoded = encoded
-                self.history_routing = None
+                if self.recurrent_history_graph:
+                    graph_encoded, self.history_routing = self.history_diffusion(
+                        encoded, variant_edges, variant_attr
+                    )
+                else:
+                    graph_encoded = encoded
+                    self.history_routing = None
             else:
                 graph_encoded, self.history_routing = self.history_diffusion(
                     encoded, variant_edges, variant_attr
@@ -251,9 +261,14 @@ class RiverGraphCrossFormer(nn.Module):
                 self.output_gate_values = None
                 return prediction
             assert variant_edges is not None and variant_attr is not None
-            attention_edges, attention_attr, path_hops = self._expanded_graph(
-                variant_edges, variant_attr
-            )
+            if self.recurrent_routing_mode == "fixed_direct":
+                attention_edges = variant_edges
+                attention_attr = variant_attr
+                path_hops = torch.ones_like(variant_edges[0])
+            else:
+                attention_edges, attention_attr, path_hops = self._expanded_graph(
+                    variant_edges, variant_attr
+                )
             prediction, self.attention_weights, self.fusion_weights = (
                 self.recurrent_decoder(
                     history_states,

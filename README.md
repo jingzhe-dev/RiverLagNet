@@ -59,6 +59,15 @@ attention. The speed projections are zero-initialized, so the candidate starts
 exactly from the static-prior RCELA model. Learned routing weights and speed
 ratios are predictive parameters, not causal or physical velocity estimates.
 
+`model=river_crossformer_dual_stage` implements **Dual-stage Direct Delayed
+Recurrence (D3R)**. The 90-day history is first propagated only along direct
+upstream edges at rounded travel-time lags, then the future recurrent decoder
+reads one causal delayed state per direct edge rather than searching every
+ancestor-lag combination. This puts the real river graph before temporal
+compression and inside forecast-state evolution while sharply reducing the
+routing search space. Multi-hop influence is produced by recurrence; no
+attention weight is interpreted causally.
+
 The repository includes deterministic synthetic benchmarks and a leakage-safe real-data path for the China daily monitoring source. Real-data preparation restores per-value imputation flags, excludes imputed values from normalization/loss/metrics, and retains an auditable station-to-river mapping. A single training run is not treated as a general real-world skill claim.
 
 ## Environment

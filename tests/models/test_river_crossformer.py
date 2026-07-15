@@ -138,7 +138,12 @@ def test_crossformer_expands_directed_ancestor_paths_for_attention_only() -> Non
     assert model.attention_weights.shape == (2, 4, 5, 5, 2)
 
 
-def _recurrent_model(graph_variant: str = "directed") -> RiverGraphCrossFormer:
+def _recurrent_model(
+    graph_variant: str = "directed",
+    *,
+    routing_mode: str = "attention",
+    history_graph: bool = False,
+) -> RiverGraphCrossFormer:
     return RiverGraphCrossFormer(
         value_dim=5,
         static_dim=2,
@@ -155,6 +160,8 @@ def _recurrent_model(graph_variant: str = "directed") -> RiverGraphCrossFormer:
         history_steps=2,
         max_path_hops=1,
         fusion_mode="recurrent",
+        recurrent_routing_mode=routing_mode,
+        recurrent_history_graph=history_graph,
         dropout=0.0,
     ).eval()
 
@@ -203,6 +210,33 @@ def test_recurrent_crossformer_zero_starts_at_same_no_graph_model() -> None:
     assert graph.attention_weights.shape == (2, 4, 3, 4, 2)
     assert graph.fusion_weights is not None
     assert graph.fusion_weights.shape == (2, 4, 4, 2)
+
+
+def test_dual_stage_recurrent_model_uses_direct_lags_and_history_graph() -> None:
+    torch.manual_seed(37)
+    graph = _recurrent_model(
+        "directed", routing_mode="fixed_direct", history_graph=True
+    )
+    local = _recurrent_model(
+        "no_graph", routing_mode="fixed_direct", history_graph=True
+    )
+    local.load_state_dict(graph.state_dict(), strict=True)
+    inputs = _inputs()
+
+    initial_graph = graph(**inputs)
+    initial_local = local(**inputs)
+
+    assert torch.equal(initial_graph, initial_local)
+    assert graph.attention_weights is not None
+    assert graph.attention_weights.shape == (2, 4, 3, 1, 2)
+    assert graph.history_routing is not None
+
+    with torch.no_grad():
+        graph.history_diffusion.update[-1].weight.fill_(0.03)
+    activated_graph = graph(**inputs)
+    activated_local = local(**inputs)
+    assert torch.equal(activated_graph[:, :, 0], activated_local[:, :, 0])
+    assert not torch.equal(activated_graph[:, :, 1:], activated_local[:, :, 1:])
 
 
 def test_recurrent_residual_training_only_unfreezes_attention_and_fusion() -> None:

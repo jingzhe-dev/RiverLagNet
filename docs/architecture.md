@@ -396,6 +396,33 @@ remain unchanged. The mechanism is enabled by
 centres are routing parameters, not measurements of physical velocity or
 causal transport effects.
 
+### Innovation 7: Dual-stage direct delayed recurrence (D3R)
+
+**Problem.** Expanded ancestor-path attention creates roughly
+`paths * max_lag` candidates at every forecast step. On the 61-node mainstem,
+this lets thousands of weak alternatives compete with the 60 observed direct
+river links, and the recurrent model does not otherwise use the graph before
+compressing the 90-day history.
+
+**Method.** D3R places the directed graph on both sides of the temporal
+encoder. First, `DirectedLaggedHistoryPropagation` aligns each direct upstream
+edge to its rounded travel time and repeatedly propagates only historical
+states before the Transformer. Second, the future recurrent decoder reads
+exactly one causally available state per direct edge and forecast day:
+
+```text
+s_j(h) = H_j[T_in - 1 + h - round(T_ji)],  h <= round(T_ji)
+         Z_j[h - round(T_ji) - 1],         h > round(T_ji)
+```
+
+Incoming direct edges are normalized per destination and routing head. Their
+absolute and destination-relative messages enter the same zero-start GMRF
+state update used by RCELA. Multi-hop effects arise through repeated history
+propagation and future recurrence, not by materializing every ancestor path.
+Headwaters remain exactly local, lags are strictly positive, and the no-graph
+control retains the same backbone and parameter budget. The configuration is
+`model=river_crossformer_dual_stage`.
+
 ## Joint directed lag attention
 
 For destination `i`, source `j`, forecast lead `h`, and discrete lag `τ`:
