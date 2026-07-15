@@ -29,13 +29,37 @@ def _restore_module(
     checkpoint: Path,
     *,
     graph: bool,
+    architecture: str = "trajectory",
 ) -> RiverForecastModule:
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     state_dict = payload.get("state_dict")
     hyperparameters = payload.get("hyper_parameters")
     if not isinstance(state_dict, dict) or not isinstance(hyperparameters, dict):
         raise ValueError(f"invalid checkpoint: {checkpoint}")
-    if graph:
+    if architecture == "recurrent_crossformer":
+        model = build_model(
+            "river_crossformer",
+            datamodule.data_spec,
+            output_window=30,
+            hidden_dim=64,
+            target_dim=3,
+            max_lag=30,
+            graph_variant="directed" if graph else "no_graph",
+            graph_seed=42,
+            transformer_heads=4,
+            transformer_layers=2,
+            graph_heads=4,
+            history_steps=8,
+            max_path_hops=8,
+            use_target_transport=False,
+            fusion_mode="recurrent",
+            dropout=0.1,
+            lag_prior_scale_days=2.0,
+            max_dynamic_shift_days=2.0,
+        )
+    elif architecture != "trajectory":
+        raise ValueError(f"unsupported diagnostic architecture: {architecture}")
+    elif graph:
         model = build_model(
             "riverlagnet",
             datamodule.data_spec,
@@ -281,6 +305,7 @@ def build_diagnostic(
     graph_checkpoint: Path,
     *,
     device: str | None = None,
+    architecture: str = "trajectory",
 ) -> dict[str, Any]:
     """Build a validation-only graph-error diagnostic."""
     datamodule = RiverDataModule(
@@ -298,9 +323,17 @@ def build_diagnostic(
         device or ("cuda" if torch.cuda.is_available() else "cpu")
     )
     baseline = _restore_module(
-        datamodule, baseline_checkpoint, graph=False
+        datamodule,
+        baseline_checkpoint,
+        graph=False,
+        architecture=architecture,
     )
-    graph = _restore_module(datamodule, graph_checkpoint, graph=True)
+    graph = _restore_module(
+        datamodule,
+        graph_checkpoint,
+        graph=True,
+        architecture=architecture,
+    )
     train = _paired_predictions(
         baseline, graph, datamodule.train_dataloader(), selected_device
     )
@@ -320,6 +353,7 @@ def build_diagnostic(
     return {
         "split_used": ["train_fit", "validation_evaluation"],
         "held_out_test_opened": False,
+        "architecture": architecture,
         "dataset_path": str(dataset_path),
         "baseline_checkpoint": str(baseline_checkpoint),
         "graph_checkpoint": str(graph_checkpoint),
@@ -352,12 +386,18 @@ def main() -> None:
     parser.add_argument("--graph-checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), default=None)
+    parser.add_argument(
+        "--architecture",
+        choices=("trajectory", "recurrent_crossformer"),
+        default="trajectory",
+    )
     args = parser.parse_args()
     result = build_diagnostic(
         args.dataset,
         args.baseline_checkpoint,
         args.graph_checkpoint,
         device=args.device,
+        architecture=args.architecture,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
