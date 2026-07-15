@@ -106,3 +106,6 @@
 - 2026-07-15｜诊断提交前 `git diff --cached --check` 已报告生成 JSON 的 CRLF 尾空白但命令串仍继续提交并推送｜没有在 `diff --check` 后显式检查退出码，且生成脚本未固定 LF｜新增 JSON 的 LF 属性、让生成脚本显式使用 LF，并以新提交修复；后续提交命令在检查失败时立即退出｜任何提交前校验都必须作为硬门槛串联，不能只打印结果
 - 2026-07-15｜递归时滞 attention 首次 CUDA bf16 测试在上下文赋值处发生 dtype 冲突｜为保持数值稳定让 sparsemax 权重保留 float32，但聚合时未转换为 bf16 候选值 dtype｜聚合前显式将权重转换为候选值 dtype，并保留真实 CUDA autocast 回归测试｜混合精度稀疏归一化应分离“权重计算 dtype”和“消息聚合 dtype”并在边界显式转换
 - 2026-07-15｜递归时滞 attention 第二次 CUDA bf16 测试仍在同一赋值处冲突｜只转换了乘法输入，autocast 仍让归约结果回到 float32｜在归约完成后把最终消息再次显式转换为上下文 dtype，并同步覆盖多入边路径｜AMP 下不能从算子输入 dtype 推断归约输出 dtype，原位赋值前必须校验最终张量 dtype
+- 2026-07-15｜RCELA 无图正式实验首次启动在 Hydra override 解析阶段失败｜`experiment.description` 含分号，超出未转义 override 字符语法｜确认训练尚未开始且未写结果，改用无标点下划线描述重新启动｜CLI 自由文本覆盖必须使用 Hydra 安全字符或配置文件承载，正式长任务前先做 override 解析检查
+- 2026-07-15｜RCELA 无图正式训练完成 early stopping 后在 Rich 进度条 teardown 因 GBK 无法编码项目符号而记为 crash｜正式命令遗漏了已在 smoke 中使用的禁用进度条覆盖，Windows 旧控制台在结束渲染时触发编码错误｜保留自动 crash 账本和 checkpoint，以相同确定性配置在 `enable_progress_bar=false` 下重新训练并自动登记｜Windows 正式训练命令固定关闭 Rich 进度条，不能只在 smoke 命令中使用
+- 2026-07-15｜为规避 Rich 输出编码而设置 `PYTHONUTF8=1` 后 Python 在导入 site 阶段失败｜DeepWater 环境存在本地编码的 `.pth`，全局 UTF-8 模式错误地改变了环境文件解码方式｜撤销全局 UTF-8，仅关闭 Rich 进度条并用 `PYTHONIOENCODING` 控制标准流｜现有 Conda 环境不能假设所有元数据均为 UTF-8，控制台编码修复不得改变文件系统默认解码
