@@ -10,6 +10,7 @@
 - Agent rules: `AGENTS.md`
 - Current integration branch before Session A: `research/20260714-graph-15pct`
 - Planned v0.2 integration branch after Session A: `research/20260715-riverlagnet-v02`
+- Session A predecessor commit: `1de534e` on `research/20260714-graph-15pct`
 - Primary data: `data/processed/china-real-daily-contracted-1068-extended-v0.4/dataset.npz`
 - Final test access: prohibited until Session D
 
@@ -43,7 +44,7 @@ Observed on 2026-07-15:
 
 | Session | Status | Owner | Combined scope | Completion evidence | Commit |
 |---|---|---|---|---|---|
-| A — engineering foundation and protocol | ready | unassigned | interrupted-run audit; pending-record closure; v0.2 branch; safe cleanup; legacy inventory; hardware optimization; immutable data/split/metric/budget protocol | clean pushed branch; cleanup audit; full pytest; throughput matrix; selected Blackwell profile; data hash; split/leakage tests | — |
+| A — engineering foundation and protocol | in_progress | Codex Session A (2026-07-15) | interrupted-run audit; pending-record closure; v0.2 branch; safe cleanup; legacy inventory; hardware optimization; immutable data/split/metric/budget protocol | predecessor `1de534e` pushed; interrupted v37 directory audited and removed without a ledger row; remaining evidence pending | — |
 | B — signal feasibility and strong local backbone | waiting | unassigned | upstream residual probes; event analysis; conditional data enrichment; strong no-graph backbone; frozen 12-config search set | signal-gate decision; frozen data; three-fold/three-seed local summary | — |
 | C — v0.2 model, screening, and ablation | waiting | unassigned | vectorized propagation; graph-off and capacity controls; tests; three-seed screening; runtime profile; counterfactual ablations | promoted candidate; mechanism attribution; runtime gate | — |
 | D — confirmation and release | waiting | unassigned | three-fold/five-seed confirmation; uncertainty; visualization; 15% decision; one-time test; final retirement cleanup; release | complete reports; full pytest; final commit and push | — |
