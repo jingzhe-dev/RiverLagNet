@@ -109,3 +109,4 @@
 - 2026-07-15｜RCELA 无图正式实验首次启动在 Hydra override 解析阶段失败｜`experiment.description` 含分号，超出未转义 override 字符语法｜确认训练尚未开始且未写结果，改用无标点下划线描述重新启动｜CLI 自由文本覆盖必须使用 Hydra 安全字符或配置文件承载，正式长任务前先做 override 解析检查
 - 2026-07-15｜RCELA 无图正式训练完成 early stopping 后在 Rich 进度条 teardown 因 GBK 无法编码项目符号而记为 crash｜正式命令遗漏了已在 smoke 中使用的禁用进度条覆盖，Windows 旧控制台在结束渲染时触发编码错误｜保留自动 crash 账本和 checkpoint，以相同确定性配置在 `enable_progress_bar=false` 下重新训练并自动登记｜Windows 正式训练命令固定关闭 Rich 进度条，不能只在 smoke 命令中使用
 - 2026-07-15｜为规避 Rich 输出编码而设置 `PYTHONUTF8=1` 后 Python 在导入 site 阶段失败｜DeepWater 环境存在本地编码的 `.pth`，全局 UTF-8 模式错误地改变了环境文件解码方式｜撤销全局 UTF-8，仅关闭 Rich 进度条并用 `PYTHONIOENCODING` 控制标准流｜现有 Conda 环境不能假设所有元数据均为 UTF-8，控制台编码修复不得改变文件系统默认解码
+- 2026-07-15｜纯 innovation 正式训练的执行单元在 3600 秒超时后误判 Python 训练进程已终止｜只看到外层 PowerShell 超时，未先检查其 DeepWater 子进程仍在 GPU 上运行｜核对 PID、GPU 与 metrics 后取消恢复计划，仅轮询原进程直至其正常 early stopping 和自动记账｜长训练超时必须高于最坏 early-stopping 时长，外层超时后先查子进程再判断是否恢复，禁止直接重复启动
