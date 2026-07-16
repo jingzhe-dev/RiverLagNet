@@ -10,6 +10,7 @@
 - Agent rules: `AGENTS.md`
 - Current integration branch before Session A: `research/20260714-graph-15pct`
 - Planned v0.2 integration branch after Session A: `research/20260715-riverlagnet-v02`
+- Active v0.2 integration branch after Session A: `research/20260715-riverlagnet-v02`
 - Session A predecessor commit: `1de534e` on `research/20260714-graph-15pct`
 - Primary data: `data/processed/china-real-daily-contracted-1068-extended-v0.4/dataset.npz`
 - Final test access: prohibited until Session D
@@ -40,12 +41,21 @@ Observed on 2026-07-15:
 - Existing uncommitted changes in `docs/agent_errors.md` and `experiments/results.tsv` belong to the ongoing research branch and must be preserved.
 - No formal model training is authorized until Session A completes hardware optimization and protocol freezing.
 
+Session A completed on 2026-07-16:
+
+- The interrupted v37 run was removed without a ledger row; authentic pending research records were preserved and pushed.
+- The frozen dataset has SHA-256 `7e49e836997d7aac68628f61634ed1f89c82e0706d30c6b721b67eac5d381710`, 3,972 days, 1,068 nodes, 1,067 directed edges, and 27 dynamic variables.
+- Fold A/B/C chronology, train-only normalization, sealed final-test access, manifest fingerprinting, GPU locking, equal-update budgets, safe cleanup, and real CUDA teardown are covered by the 224-test suite.
+- The selected measured profile is BF16 fused AdamW, physical batch 8, workers 0, effective batch 96, accumulation 12, and no compile: 0.7559 optimizer updates/s, 71.02 samples/s, 7.90 GiB peak reserved VRAM, and 87.69 GiB free headroom.
+- The profile is 2.29% faster than the equal-exposure batch-4/worker-0 legacy stack. Its 44% median SM utilization is retained as a measured limitation; compile was rejected because Triton is unavailable.
+- Full pytest and both required single-GPU fast-dev runs passed. The GPU lock was released and no v0.2 final-test metric was created.
+
 ## Main session board
 
 | Session | Status | Owner | Combined scope | Completion evidence | Commit |
 |---|---|---|---|---|---|
-| A — engineering foundation and protocol | in_progress | Codex Session A (2026-07-15) | interrupted-run audit; pending-record closure; v0.2 branch; safe cleanup; legacy inventory; hardware optimization; immutable data/split/metric/budget protocol | predecessor `1de534e` pushed; interrupted v37 directory audited and removed without a ledger row; remaining evidence pending | — |
-| B — signal feasibility and strong local backbone | waiting | unassigned | upstream residual probes; event analysis; conditional data enrichment; strong no-graph backbone; frozen 12-config search set | signal-gate decision; frozen data; three-fold/three-seed local summary | — |
+| A — engineering foundation and protocol | complete | Codex Session A (2026-07-15–16) | interrupted-run audit; pending-record closure; v0.2 branch; safe cleanup; legacy inventory; hardware optimization; immutable data/split/metric/budget protocol | 224 tests passed; synthetic and real fold-A GPU fast-dev passed; manifest/protocol/profile versioned; protected assets retained; no GPU lock or v0.2 final-test metric | `1de534e`, `063e2e1`, `3d38b6e`, `6fa62d2`, `543bb78`, `f7e3996`, `60b73f8`, `3b768da`, plus branch-tip handoff commit |
+| B — signal feasibility and strong local backbone | ready | unassigned | upstream residual probes; event analysis; conditional data enrichment; strong no-graph backbone; frozen 12-config search set | authorized by the satisfied Session A exit gate; signal-gate decision, frozen data, and three-fold/three-seed local summary remain pending | — |
 | C — v0.2 model, screening, and ablation | waiting | unassigned | vectorized propagation; graph-off and capacity controls; tests; three-seed screening; runtime profile; counterfactual ablations | promoted candidate; mechanism attribution; runtime gate | — |
 | D — confirmation and release | waiting | unassigned | three-fold/five-seed confirmation; uncertainty; visualization; 15% decision; one-time test; final retirement cleanup; release | complete reports; full pytest; final commit and push | — |
 
@@ -85,3 +95,4 @@ Before authorizing the next main session, verify:
 | 2026-07-15 | Optimize Blackwell utilization before multi-seed training | Hardware audit: 95.6 GiB VRAM, batch 4, workers 0, low utilization |
 | 2026-07-15 | Remove temporary and retired assets through an allowlisted, tested process | User approval and ignored-file audit |
 | 2026-07-15 | Consolidate execution into four main Codex sessions | User requested fewer session handoffs |
+| 2026-07-16 | Select batch 8, workers 0, effective batch 96, accumulation 12, BF16 fused AdamW, and no compile | Real fold-A equal-exposure benchmark: 0.7559 optimizer updates/s, 7.90 GiB reserved, 87.69 GiB headroom, 2.29% faster than legacy; compile failed without Triton |

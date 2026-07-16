@@ -135,3 +135,6 @@
 - 2026-07-15｜首轮硬件矩阵用 accumulation=1 比较不同 physical batch，导致 optimizer steps/s 对应不同样本曝光｜只实现了 Task 6 的物理批量网格，遗漏设计中“物理批量不同时以梯度累积保持有效批量”的公平性约束｜以候选批量最小公倍数 96 固定 effective batch，并把 accumulation 和有效批量写入每条测量及测试｜吞吐矩阵在开始长跑前必须断言所有候选的每更新样本曝光一致
 - 2026-07-16｜等曝光硬件矩阵被会话消息中断后丢失已完成候选｜基准器只在全流程结束时写最终 JSON，没有逐候选持久化｜增加带协议签名、逐条 fsync 的 JSONL journal 和自动续跑测试，最终产物成功后才删除 journal｜任何超过单个候选时长的矩阵任务必须先实现原子进度保存与恢复
 - 2026-07-16｜top-2 三次重复后选择器把仅测一次的第三名重新选为赢家并错误启动 compile｜最终排名仍混入所有首轮候选，没有要求同等重复次数｜最终选择增加 `minimum_repetitions=3` 门槛并用失败测试覆盖未重复的更快候选｜重复测量协议必须把重复数作为候选资格条件，而不只计算已有样本的中位数
+- 2026-07-16｜Session A synthetic GPU fast-dev 训练结束后 RuntimeStatsCallback 用 CPU 设备查询 CUDA 峰值而退出失败｜Lightning teardown 已把 module 移回 CPU，回调仍动态读取 `pl_module.device`｜在 fit 开始时冻结实际 CUDA device，并增加真实 CUDA teardown 回归测试｜跨 teardown 的硬件回调不得依赖 module 的结束时设备
+- 2026-07-16｜复跑 CUDA 回归测试的首次工具调用因 JavaScript 工作目录字符串中的反斜杠被解析为八进制转义而未执行｜Windows 路径没有使用原始字符串或双重转义｜改用 `String.raw` 保存工作目录并重新执行同一测试｜在 JavaScript 工具编排中统一用原始字符串表达 Windows 路径
+- 2026-07-16｜Session A 交付审计的首次并行工具调用因嵌套 PowerShell 正则引号破坏 JavaScript 字符串而未执行｜混用了 JavaScript 单引号和 PowerShell 双单引号转义｜把包含正则的命令整体改为 `String.raw` 模板后重新执行｜嵌套 shell 命令优先使用原始模板字符串，不跨语言复用引号转义规则

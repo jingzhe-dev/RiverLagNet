@@ -26,6 +26,8 @@ class RuntimeStatsCallback(Callback):
         self.samples_processed = 0
         self.optimizer_steps = 0
         self._uses_cuda = False
+        self._cuda_device: torch.device | None = None
+        self._fit_device = "unknown"
 
     def on_fit_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
         self.duration_s = 0.0
@@ -37,9 +39,11 @@ class RuntimeStatsCallback(Callback):
         self.samples_processed = 0
         self.optimizer_steps = 0
         self._uses_cuda = pl_module.device.type == "cuda"
+        self._cuda_device = pl_module.device if self._uses_cuda else None
+        self._fit_device = str(pl_module.device)
         self.started_at = time.perf_counter()
-        if self._uses_cuda:
-            torch.cuda.reset_peak_memory_stats(pl_module.device)
+        if self._cuda_device is not None:
+            torch.cuda.reset_peak_memory_stats(self._cuda_device)
 
     def on_train_batch_end(
         self,
@@ -54,16 +58,16 @@ class RuntimeStatsCallback(Callback):
             self.samples_processed += int(batch["x"].shape[0])
 
     def on_fit_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
-        if self._uses_cuda:
-            torch.cuda.synchronize(pl_module.device)
+        if self._cuda_device is not None:
+            torch.cuda.synchronize(self._cuda_device)
         self.duration_s = time.perf_counter() - self.started_at
         self.optimizer_steps = int(trainer.global_step)
-        if self._uses_cuda:
+        if self._cuda_device is not None:
             self.peak_allocated_vram_gb = (
-                torch.cuda.max_memory_allocated(pl_module.device) / 1024**3
+                torch.cuda.max_memory_allocated(self._cuda_device) / 1024**3
             )
             self.peak_reserved_vram_gb = (
-                torch.cuda.max_memory_reserved(pl_module.device) / 1024**3
+                torch.cuda.max_memory_reserved(self._cuda_device) / 1024**3
             )
         self.peak_vram_gb = self.peak_allocated_vram_gb
         if self.duration_s > 0.0:
@@ -85,7 +89,9 @@ class RuntimeStatsCallback(Callback):
 
     def as_dict(self, pl_module: LightningModule | None = None) -> dict[str, Any]:
         """Return JSON-safe runtime and hardware statistics."""
-        device = str(pl_module.device) if pl_module is not None else "unknown"
+        device = self._fit_device
+        if device == "unknown" and pl_module is not None:
+            device = str(pl_module.device)
         return {
             "duration_s": self.duration_s,
             "samples_processed": self.samples_processed,

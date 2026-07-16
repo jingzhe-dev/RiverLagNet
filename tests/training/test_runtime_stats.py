@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import torch
+import pytest
 from hydra import compose, initialize_config_dir
 from lightning.pytorch import Trainer
 
@@ -48,6 +49,43 @@ def test_runtime_stats_write_throughput_and_memory_json(tmp_path: Path) -> None:
     assert payload["optimizer_steps_per_second"] == runtime.optimizer_steps_per_second
     assert payload["peak_allocated_vram_gb"] == runtime.peak_allocated_vram_gb
     assert payload["peak_reserved_vram_gb"] == runtime.peak_reserved_vram_gb
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_runtime_stats_keeps_the_fit_cuda_device_through_teardown(
+    tmp_path: Path,
+) -> None:
+    data = RiverDataModule(
+        num_days=180,
+        num_nodes=4,
+        input_window=20,
+        output_window=10,
+        batch_size=2,
+    )
+    data.setup("fit")
+    model = build_model("station_gru", data.data_spec, output_window=10, hidden_dim=8)
+    module = RiverForecastModule(model, fused_adamw=True)
+    output_path = tmp_path / "cuda-hardware.json"
+    runtime = RuntimeStatsCallback(output_path=output_path)
+    trainer = Trainer(
+        accelerator="gpu",
+        devices=1,
+        precision="bf16-mixed",
+        gradient_clip_val=1.0,
+        fast_dev_run=True,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        callbacks=[runtime],
+    )
+
+    trainer.fit(module, datamodule=data)
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert trainer.state.finished
+    assert payload["device"].startswith("cuda")
+    assert payload["peak_reserved_vram_gb"] > 0.0
 
 
 def test_blackwell_config_and_tf32_high_contract() -> None:

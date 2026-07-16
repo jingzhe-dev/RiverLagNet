@@ -1,6 +1,37 @@
-# RiverLagNet v0.1
+# RiverLagNet
 
 RiverLagNet is a daily, multi-station water-quality forecasting system centered on **Directed Lag-aware River Message Passing**. It predicts `NH3N`, `CODMn`, and `TP` for the next 30 days from 90 historical days while preserving explicit upstream-to-downstream river direction and discrete travel lags.
+
+## RiverLagNet v0.2 protocol
+
+The active integration branch is `research/20260715-riverlagnet-v02`. Session A freezes the engineering and evaluation foundation; the v0.1 architectures and results below remain historical evidence and controls, not the v0.2 model claim.
+
+The sole formal dataset is `data/processed/china-real-daily-contracted-1068-extended-v0.4/dataset.npz`: 3,972 daily observations, 1,068 stations, 1,067 upstream-to-downstream edges, 27 dynamic variables, and SHA-256 `7e49e836997d7aac68628f61634ed1f89c82e0706d30c6b721b67eac5d381710`. Its versioned contract is in [`experiments/v0.2_data_manifest.json`](experiments/v0.2_data_manifest.json), and the frozen selection protocol is in [`experiments/v0.2_protocol.yaml`](experiments/v0.2_protocol.yaml). Regenerate and verify the raw-value-free manifest with:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.write_data_manifest `
+  --dataset data/processed/china-real-daily-contracted-1068-extended-v0.4/dataset.npz `
+  --output experiments/v0.2_data_manifest.json
+```
+
+Development uses chronological rolling folds A/B/C. Scaler statistics are fit only on each fold's training interval. The final 15% test interval is locked and must not be opened, evaluated, summarized, or used for tuning before Session D.
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily_contracted_1068_v02 data.split_name=v02_fold_a model=station_gru trainer=blackwell_96gb trainer.fast_dev_run=true experiment.record_result=false
+conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily_contracted_1068_v02 data.split_name=v02_fold_b model=station_gru trainer=blackwell_96gb trainer.fast_dev_run=true experiment.record_result=false
+conda run -n DeepWater python -m RiverLagNet.cli.train data=china_real_daily_contracted_1068_v02 data.split_name=v02_fold_c model=station_gru trainer=blackwell_96gb trainer.fast_dev_run=true experiment.record_result=false
+```
+
+Formal CUDA work is serialized by the atomic lock at `runs/.gpu0.lock`; do not run two formal GPU processes concurrently. The measured RTX PRO 6000 Blackwell profile uses BF16, fused AdamW, TF32 high, physical batch 8, no DataLoader workers, effective batch 96, gradient accumulation 12, and `torch.compile=false`. On the frozen fold-A StationGRU benchmark it achieved 0.7559 optimizer updates/s and 71.02 samples/s with 7.90 GiB peak reserved VRAM and 87.69 GiB headroom. This is 2.29% faster than the equal-exposure previous batch-4/worker-0 stack; the model's low 44% median SM utilization is a measured limitation. Full evidence is in [`docs/hardware/blackwell-96gb-profile.md`](docs/hardware/blackwell-96gb-profile.md) and [`experiments/hardware/blackwell-96gb-benchmark.json`](experiments/hardware/blackwell-96gb-benchmark.json).
+
+Generated artifacts are removed only through the tested allowlist. Always inspect the dry run first:
+
+```powershell
+conda run -n DeepWater python -m RiverLagNet.cli.clean_generated --dry-run
+conda run -n DeepWater python -m RiverLagNet.cli.clean_generated --apply
+```
+
+Production modules and versioned evidence are not deleted in Session A. Their future disposition is recorded in [`docs/legacy_inventory.md`](docs/legacy_inventory.md). Continue only through the approved self-contained plans for [Session B](docs/superpowers/plans/2026-07-15-riverlagnet-v0.2-session-b-signal-local.md), [Session C](docs/superpowers/plans/2026-07-15-riverlagnet-v0.2-session-c-graph.md), and [Session D](docs/superpowers/plans/2026-07-15-riverlagnet-v0.2-session-d-confirm-release.md), as authorized by the [coordination status](docs/coordination/riverlagnet-v0.2-status.md).
 
 The active architecture research adds **Causal Multi-hop Lagged History
 Diffusion (CMLHD)**: encoded 27-variable upstream histories are shifted by each
@@ -79,7 +110,7 @@ conda run -n DeepWater python -m pip install .
 conda run -n DeepWater python -m pytest -q
 ```
 
-Pytest stores temporary files under `build/pytest` and removes them, `.pytest_cache`, and repository-local `__pycache__` directories when the session ends. Test source files are never deleted. Manual smoke outputs can be removed safely with `python -m RiverLagNet.cli.cleanup_test_artifacts`.
+Pytest stores temporary files under `build/pytest` and removes them, `.pytest_cache`, and repository-local `__pycache__` directories when the session ends. Test source files are never deleted. Inspect and remove allowlisted generated artifacts with `python -m RiverLagNet.cli.clean_generated --dry-run` followed by `python -m RiverLagNet.cli.clean_generated --apply`.
 
 On Windows checkouts whose path contains non-ASCII characters, use a regular installation (`pip install .`) rather than editable installation because Python 3.10 may read editable `.pth` files with the system code page.
 
@@ -158,7 +189,8 @@ One-batch synthetic validation:
 
 ```powershell
 conda run -n DeepWater python -m RiverLagNet.cli.train trainer.fast_dev_run=true data=synthetic run_dir=build/smoke/synthetic experiment.record_result=false
-conda run -n DeepWater python -m RiverLagNet.cli.cleanup_test_artifacts
+conda run -n DeepWater python -m RiverLagNet.cli.clean_generated --dry-run
+conda run -n DeepWater python -m RiverLagNet.cli.clean_generated --apply
 ```
 
 Station GRU baseline:
