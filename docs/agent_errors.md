@@ -138,3 +138,4 @@
 - 2026-07-16｜Session A synthetic GPU fast-dev 训练结束后 RuntimeStatsCallback 用 CPU 设备查询 CUDA 峰值而退出失败｜Lightning teardown 已把 module 移回 CPU，回调仍动态读取 `pl_module.device`｜在 fit 开始时冻结实际 CUDA device，并增加真实 CUDA teardown 回归测试｜跨 teardown 的硬件回调不得依赖 module 的结束时设备
 - 2026-07-16｜复跑 CUDA 回归测试的首次工具调用因 JavaScript 工作目录字符串中的反斜杠被解析为八进制转义而未执行｜Windows 路径没有使用原始字符串或双重转义｜改用 `String.raw` 保存工作目录并重新执行同一测试｜在 JavaScript 工具编排中统一用原始字符串表达 Windows 路径
 - 2026-07-16｜Session A 交付审计的首次并行工具调用因嵌套 PowerShell 正则引号破坏 JavaScript 字符串而未执行｜混用了 JavaScript 单引号和 PowerShell 双单引号转义｜把包含正则的命令整体改为 `String.raw` 模板后重新执行｜嵌套 shell 命令优先使用原始模板字符串，不跨语言复用引号转义规则
+- 2026-07-16｜Session B 接管审计的首次并行工具调用因内嵌 Python 字符串引号破坏 JavaScript 源码而未执行｜在普通 JavaScript 单引号字符串中嵌套了 PowerShell 与 Python 的多层单引号｜将各命令统一改为 `String.raw` 模板并简化 Python 输出拼接后重跑｜三层语言嵌套命令必须从最外层使用原始模板字符串并避免复用同类引号
