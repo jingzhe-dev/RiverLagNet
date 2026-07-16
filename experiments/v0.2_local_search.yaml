@@ -1,0 +1,128 @@
+protocol_version: riverlagnet-v0.2-local-search-20260717
+family: local
+dataset: china_real_daily_contracted_1068_v02
+model: local_multiscale
+trainer: blackwell_96gb
+experiment: v02_local_search
+ledger_path: experiments/results.tsv
+run_root: runs/v02_local_search
+effective_batch_size: 96
+stages:
+  - name: screen
+    candidate_count: 12
+    folds: [v02_fold_a]
+    seeds: [42]
+    max_epochs: 25
+    max_steps: 475
+    early_stopping_patience: 12
+  - name: promote
+    candidate_count: 4
+    folds: [v02_fold_a, v02_fold_b, v02_fold_c]
+    seeds: [42]
+    max_epochs: 50
+    max_steps: 950
+    early_stopping_patience: 12
+  - name: confirm
+    candidate_count: 2
+    folds: [v02_fold_a, v02_fold_b, v02_fold_c]
+    seeds: [42, 43, 44]
+    max_epochs: 100
+    max_steps: 1900
+    early_stopping_patience: 12
+configs:
+  - id: local_01
+    input_window: 90
+    hidden_dim: 128
+    num_layers: 2
+    dropout: 0.05
+    learning_rate: 0.0003
+    weight_decay: 0.00001
+    nse_aux_weight: 0.00
+  - id: local_02
+    input_window: 90
+    hidden_dim: 128
+    num_layers: 4
+    dropout: 0.10
+    learning_rate: 0.0006
+    weight_decay: 0.0001
+    nse_aux_weight: 0.05
+  - id: local_03
+    input_window: 90
+    hidden_dim: 256
+    num_layers: 2
+    dropout: 0.20
+    learning_rate: 0.001
+    weight_decay: 0.001
+    nse_aux_weight: 0.10
+  - id: local_04
+    input_window: 90
+    hidden_dim: 256
+    num_layers: 4
+    dropout: 0.05
+    learning_rate: 0.0006
+    weight_decay: 0.00001
+    nse_aux_weight: 0.10
+  - id: local_05
+    input_window: 180
+    hidden_dim: 128
+    num_layers: 2
+    dropout: 0.10
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    nse_aux_weight: 0.00
+  - id: local_06
+    input_window: 180
+    hidden_dim: 128
+    num_layers: 4
+    dropout: 0.20
+    learning_rate: 0.0003
+    weight_decay: 0.001
+    nse_aux_weight: 0.05
+  - id: local_07
+    input_window: 180
+    hidden_dim: 256
+    num_layers: 2
+    dropout: 0.05
+    learning_rate: 0.0006
+    weight_decay: 0.0001
+    nse_aux_weight: 0.10
+  - id: local_08
+    input_window: 180
+    hidden_dim: 256
+    num_layers: 4
+    dropout: 0.10
+    learning_rate: 0.001
+    weight_decay: 0.00001
+    nse_aux_weight: 0.05
+  - id: local_09
+    input_window: 365
+    hidden_dim: 128
+    num_layers: 2
+    dropout: 0.20
+    learning_rate: 0.0006
+    weight_decay: 0.00001
+    nse_aux_weight: 0.00
+  - id: local_10
+    input_window: 365
+    hidden_dim: 128
+    num_layers: 4
+    dropout: 0.05
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    nse_aux_weight: 0.10
+  - id: local_11
+    input_window: 365
+    hidden_dim: 256
+    num_layers: 2
+    dropout: 0.10
+    learning_rate: 0.0003
+    weight_decay: 0.001
+    nse_aux_weight: 0.05
+  - id: local_12
+    input_window: 365
+    hidden_dim: 256
+    num_layers: 4
+    dropout: 0.20
+    learning_rate: 0.0006
+    weight_decay: 0.0001
+    nse_aux_weight: 0.00
