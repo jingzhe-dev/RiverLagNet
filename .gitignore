@@ -9,6 +9,8 @@ build/
 runs/
 lightning_logs/
 *.ckpt
+experiments/hardware/*.jsonl
+experiments/hardware/*.tmp
 data/raw/
 data/processed/
 .idea/

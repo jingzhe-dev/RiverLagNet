@@ -1,31 +1,68 @@
 from pathlib import Path
 
-from RiverLagNet.testing.cleanup import clean_test_artifacts
+from RiverLagNet.testing.cleanup import (
+    clean_generated_artifacts,
+    clean_test_artifacts,
+    discover_generated_artifacts,
+)
 
 
-def test_cleanup_removes_only_transient_test_outputs(tmp_path: Path) -> None:
+def _write(path: Path, content: bytes = b"artifact") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+def test_cleanup_dry_run_and_apply_share_the_same_allowlisted_paths(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "repository"
-    transient = (
-        root / ".pytest_cache",
-        root / "build" / "pytest",
-        root / "build" / "smoke",
-        root / "src" / "package" / "__pycache__",
-        root / "runs" / "smoke_real_data",
-        root / "runs" / "test_checkpoint",
+    removable = (
+        _write(root / ".pytest_cache" / "cache.bin").parent,
+        _write(root / "build" / "pytest" / "result.bin").parent,
+        _write(root / "build" / "smoke" / "result.bin").parent,
+        _write(root / "src" / "package" / "__pycache__" / "module.pyc").parent,
+        _write(root / "orphan.pyc"),
+        _write(root / "session.log"),
+        _write(root / "RiverLagNet.egg-info" / "PKG-INFO").parent,
+        _write(root / "runs" / "smoke_real_data" / "artifact.bin").parent,
+        _write(root / "runs" / "test_checkpoint" / "artifact.bin").parent,
+        _write(root / "runs" / "interrupted" / "model.partial.ckpt"),
     )
-    for path in transient:
-        path.mkdir(parents=True)
-        (path / "artifact.bin").write_bytes(b"temporary")
-    formal_run = root / "runs" / "real_lag_v1_s42_learned_lag"
-    formal_run.mkdir(parents=True)
-    (formal_run / "best.ckpt").write_bytes(b"formal evidence")
-    test_source = root / "tests" / "test_model.py"
-    test_source.parent.mkdir(parents=True)
-    test_source.write_text("def test_model(): pass\n", encoding="utf-8")
+    protected = (
+        _write(root / "data" / "processed" / "dataset.npz"),
+        _write(root / "runs" / "selected" / "best.ckpt"),
+        _write(root / "experiments" / "results.tsv"),
+        _write(root / "tests" / "test_model.py"),
+        _write(root / "src" / "package" / "model.py"),
+        _write(root / "runs" / "formal" / "best.ckpt"),
+        _write(root / "nested" / "keep.log"),
+        _write(root / "build" / "production" / "artifact.bin"),
+    )
+
+    discovered = discover_generated_artifacts(root)
+    dry_run = clean_generated_artifacts(root, dry_run=True)
+
+    expected = tuple(sorted((path.resolve() for path in removable), key=str))
+    assert tuple(candidate.path for candidate in discovered) == expected
+    assert dry_run == expected
+    assert all(path.exists() for path in removable)
+    assert all(path.exists() for path in protected)
+
+    removed = clean_generated_artifacts(root, dry_run=False)
+
+    assert removed == dry_run
+    assert all(not path.exists() for path in removable)
+    assert all(path.exists() for path in protected)
+
+
+def test_compatible_test_cleanup_wrapper_applies_the_allowlist(tmp_path: Path) -> None:
+    root = tmp_path / "repository"
+    cache = _write(root / "tests" / "__pycache__" / "test_model.pyc").parent
+    source = _write(root / "tests" / "test_model.py")
 
     removed = clean_test_artifacts(root)
 
-    assert len(removed) == len(transient)
-    assert all(not path.exists() for path in transient)
-    assert formal_run.is_dir()
-    assert test_source.is_file()
+    assert removed == (cache.resolve(),)
+    assert not cache.exists()
+    assert source.is_file()
