@@ -142,3 +142,5 @@
 - 2026-07-17｜Task 3 接口审计读取了不存在的 `tests/models/test_models.py`｜未先用文件清单确认模型测试文件名｜改读已存在的 `test_baselines.py` 并列出 `tests/models`｜读取测试前先用 `rg --files` 获取权威路径
 - 2026-07-17｜Task 3 首次 `rg` 在 Windows 上把 `src/RiverLagNet/models/*.py` 作为路径传入而报错｜再次依赖 shell 展开通配符而 PowerShell 未替 `rg` 展开｜改用固定目录加 `-g "*.py"`｜Windows 下所有 `rg` 文件模式统一通过 `-g` 传递
 - 2026-07-17｜Task 4 首版模型注册测试只向公共模型传入了 `x` 一个参数｜编写断言时绕过了统一 Lightning batch 接口｜在运行红测前自审并改用 `RiverForecastModule(model)(batch)` 验证完整公共合同｜新增模型集成测试必须经过与训练入口相同的 batch 适配层
+- 2026-07-17｜Task 5 首版 shuffled-time 控制通过置换其他 origin 直接生成源时间，部分置换落到当前 origin 之后｜只考虑打乱相关性，没有同时维持每个样本的严格 past-only 约束｜改为在各 origin 自己的历史区间内按 seed 采样随机过去时间｜所有时间反事实必须逐样本重新断言 `source_time < origin`
+- 2026-07-17｜Task 5 首版残差探针对 lead 和 target 同时使用 NumPy 高级索引，导致 `[O,L,N]` 变成 `[L,O,N]`｜忽略了多个高级索引会把索引轴前置的 NumPy 规则｜先固定 target，再用 `np.take(..., axis=1)` 选择 lead 并显式回写｜多维实验轴选择统一使用命名轴上的 `take`，不组合多个高级索引
