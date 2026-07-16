@@ -1,0 +1,6 @@
+name: local_multiscale
+hidden_dim: 128
+target_dim: 3
+scales: [1, 3, 7, 30]
+num_layers: 2
+dropout: 0.1

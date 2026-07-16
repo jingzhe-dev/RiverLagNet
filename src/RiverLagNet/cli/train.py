@@ -303,6 +303,7 @@ def run(cfg: DictConfig) -> dict[str, Any]:
             "validation_metrics": validation_metrics,
             "experiment_record": record,
             "training_budget": budget,
+            "model_complexity": module.complexity_metrics(),
         }
 
 

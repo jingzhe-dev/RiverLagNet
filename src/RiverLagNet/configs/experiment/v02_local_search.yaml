@@ -1,0 +1,5 @@
+name: v02_local_search_${model.name}_seed${seed}
+description: v02_local_search_preregistered
+status: baseline
+record_result: true
+results_path: experiments/results.tsv

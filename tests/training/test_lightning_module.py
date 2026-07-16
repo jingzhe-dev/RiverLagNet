@@ -4,6 +4,7 @@ from lightning.pytorch import Trainer
 
 from RiverLagNet.cli import train as train_cli
 from RiverLagNet.data.datamodule import RiverDataModule
+from RiverLagNet.models.local_multiscale import LocalMultiscaleForecaster
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
 
 
@@ -17,6 +18,46 @@ def test_lightning_module_trains_one_real_batch() -> None:
     assert torch.isfinite(loss)
     loss.backward()
     assert any(parameter.grad is not None for parameter in model.parameters())
+
+
+def test_build_model_registers_standalone_local_multiscale_family() -> None:
+    data = RiverDataModule(
+        num_days=180,
+        num_nodes=5,
+        num_variables=5,
+        input_window=20,
+        output_window=10,
+        batch_size=2,
+    )
+    data.setup("fit")
+
+    model = build_model(
+        "local_multiscale",
+        data.data_spec,
+        output_window=10,
+        hidden_dim=8,
+        scales=(1, 3),
+        num_layers=1,
+        dropout=0.0,
+    )
+
+    assert isinstance(model, LocalMultiscaleForecaster)
+    prediction = RiverForecastModule(model)(next(iter(data.train_dataloader())))
+    assert prediction.shape == (2, 10, 5, 3)
+
+
+def test_local_multiscale_rejects_graph_variants_instead_of_aliasing_them() -> None:
+    data = RiverDataModule(num_days=180, num_nodes=4, input_window=20, output_window=10)
+    data.setup("fit")
+
+    with pytest.raises(ValueError, match="graph-free"):
+        build_model(
+            "local_multiscale",
+            data.data_spec,
+            output_window=10,
+            hidden_dim=8,
+            graph_variant="no_graph",
+        )
 
 
 def test_logged_metrics_are_restored_to_physical_target_units() -> None:

@@ -11,10 +11,12 @@ from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities import GradClipAlgorithmType
 from torch import Tensor, nn
 from torch.optim import Optimizer
+from torch.utils.flop_counter import FlopCounterMode
 
 from RiverLagNet.data.datamodule import DataSpec
 from RiverLagNet.data.schema import TARGET_NAMES
 from RiverLagNet.models.baselines import PersistenceModel, StationGRU, StaticDirectedGAT
+from RiverLagNet.models.local_multiscale import LocalMultiscaleForecaster
 from RiverLagNet.models.river_crossformer import RiverGraphCrossFormer
 from RiverLagNet.models.riverlag_net import RiverLagNet
 
@@ -25,6 +27,7 @@ from .metrics import masked_metric_dict
 MODEL_TYPES = {
     "persistence": PersistenceModel,
     "station_gru": StationGRU,
+    "local_multiscale": LocalMultiscaleForecaster,
     "static_gat": StaticDirectedGAT,
     "riverlagnet": RiverLagNet,
     "river_crossformer": RiverGraphCrossFormer,
@@ -51,6 +54,8 @@ def build_model(
         model_type = MODEL_TYPES[name]
     except KeyError as error:
         raise ValueError(f"unknown model: {name}") from error
+    if name == "local_multiscale" and "graph_variant" in options:
+        raise ValueError("local_multiscale is graph-free and accepts no graph_variant")
     kwargs = {
         "value_dim": data_spec.num_variables,
         "static_dim": data_spec.static_dim,
@@ -60,6 +65,16 @@ def build_model(
         **options,
     }
     return model_type(**kwargs)
+
+
+def estimate_model_forward_flops(
+    model: nn.Module, batch: dict[str, Tensor]
+) -> tuple[Tensor, int]:
+    """Run one real-shape forward and count supported PyTorch operator FLOPs."""
+    counter = FlopCounterMode(display=False)
+    with counter:
+        prediction = model(**{key: batch[key] for key in MODEL_INPUT_KEYS})
+    return prediction, int(counter.get_total_flops())
 
 
 class RiverForecastModule(LightningModule):
@@ -92,6 +107,11 @@ class RiverForecastModule(LightningModule):
         self.register_buffer("target_mean", mean.to(torch.float32))
         self.register_buffer("target_scale", scale.to(torch.float32))
         self.model = model
+        self._trainable_parameters = sum(
+            parameter.numel() for parameter in model.parameters() if parameter.requires_grad
+        )
+        self._forward_flops: int | None = None
+        self._flop_input_shape: tuple[int, ...] | None = None
         self._dummy_parameter = (
             nn.Parameter(torch.zeros(()))
             if not any(parameter.requires_grad for parameter in model.parameters())
@@ -110,7 +130,15 @@ class RiverForecastModule(LightningModule):
         return prediction
 
     def training_step(self, batch: dict[str, Tensor], batch_idx: int) -> Tensor:
-        prediction = self(batch)
+        if self._forward_flops is None:
+            prediction, self._forward_flops = estimate_model_forward_flops(
+                self.model, batch
+            )
+            self._flop_input_shape = tuple(int(size) for size in batch["x"].shape)
+            if self._dummy_parameter is not None:
+                prediction = prediction + self._dummy_parameter * 0.0
+        else:
+            prediction = self(batch)
         huber = masked_huber_loss(
             prediction, batch["y"], batch["y_mask"], self.hparams.huber_delta
         )
@@ -135,6 +163,17 @@ class RiverForecastModule(LightningModule):
                 batch_size=batch["x"].shape[0],
             )
         return loss
+
+    def complexity_metrics(self) -> dict[str, Any]:
+        """Return the shared parameter/FLOP accounting contract."""
+        return {
+            "trainable_parameters": self._trainable_parameters,
+            "forward_flops": self._forward_flops or 0,
+            "flop_input_shape": (
+                list(self._flop_input_shape) if self._flop_input_shape is not None else []
+            ),
+            "flop_estimation_method": "torch.utils.flop_counter",
+        }
 
     def validation_step(self, batch: dict[str, Tensor], batch_idx: int) -> Tensor:
         return self._evaluation_step(batch, "val")

@@ -92,7 +92,7 @@ class RuntimeStatsCallback(Callback):
         device = self._fit_device
         if device == "unknown" and pl_module is not None:
             device = str(pl_module.device)
-        return {
+        metrics: dict[str, Any] = {
             "duration_s": self.duration_s,
             "samples_processed": self.samples_processed,
             "optimizer_steps": self.optimizer_steps,
@@ -104,3 +104,7 @@ class RuntimeStatsCallback(Callback):
             "device": device,
             "matmul_precision": torch.get_float32_matmul_precision(),
         }
+        complexity_metrics = getattr(pl_module, "complexity_metrics", None)
+        if callable(complexity_metrics):
+            metrics.update(complexity_metrics())
+        return metrics
