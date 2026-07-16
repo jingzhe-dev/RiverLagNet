@@ -12,6 +12,47 @@ TARGET_NAMES = ("NH3N", "CODMn", "TP")
 
 
 @dataclass(frozen=True)
+class LocalForecastShapeContract:
+    """Expected axes for a graph-free local forecasting context."""
+
+    history_states: tuple[int, int, int, int]
+    scale_states: tuple[int, int, int, int]
+    horizon_states: tuple[int, int, int, int]
+    prediction: tuple[int, int, int, int]
+
+    @classmethod
+    def from_dimensions(
+        cls,
+        *,
+        batch_size: int,
+        input_window: int,
+        num_nodes: int,
+        hidden_dim: int,
+        num_scales: int,
+        output_window: int = 30,
+        target_dim: int = len(TARGET_NAMES),
+    ) -> LocalForecastShapeContract:
+        """Build the immutable four-tensor shape contract."""
+        dimensions = {
+            "batch_size": batch_size,
+            "input_window": input_window,
+            "num_nodes": num_nodes,
+            "hidden_dim": hidden_dim,
+            "num_scales": num_scales,
+            "output_window": output_window,
+            "target_dim": target_dim,
+        }
+        if any(value <= 0 for value in dimensions.values()):
+            raise ValueError("local forecast context dimensions must be positive")
+        return cls(
+            history_states=(batch_size, input_window, num_nodes, hidden_dim),
+            scale_states=(batch_size, num_scales, num_nodes, hidden_dim),
+            horizon_states=(batch_size, output_window, num_nodes, hidden_dim),
+            prediction=(batch_size, output_window, num_nodes, target_dim),
+        )
+
+
+@dataclass(frozen=True)
 class RiverGraph:
     """A directed graph with upstream-to-downstream edges."""
 
@@ -43,6 +84,7 @@ class TimeSeriesData:
     observed: Tensor
     quality: Tensor | None
     graph: RiverGraph
+    variable_names: tuple[str, ...] = ()
 
     def validate(self) -> None:
         """Validate `[time, node, variable]` tensor contracts."""
@@ -59,3 +101,8 @@ class TimeSeriesData:
             raise ValueError("values node count must match graph.static")
         if self.values.shape[2] < len(TARGET_NAMES):
             raise ValueError("values must contain NH3N, CODMn, and TP in the first channels")
+        if self.variable_names:
+            if len(self.variable_names) != self.values.shape[2]:
+                raise ValueError("variable_names must match the values feature dimension")
+            if self.variable_names[: len(TARGET_NAMES)] != TARGET_NAMES:
+                raise ValueError(f"variable_names must begin with {TARGET_NAMES}")

@@ -27,6 +27,23 @@ quality:  [T, N, V] optional
 
 The first three variable channels are always `NH3N`, `CODMn`, and `TP` in that order.
 
+Prepared NPZ files persist the complete ordered `variable_names` array. Loading
+resolves an immutable `FeatureRoles` object by name: targets must occupy channels
+0–2, every later channel is exogenous, flow uses the fixed priority
+`discharge`, `river_discharge`, `streamflow`, `flow`, then `dis24`, and rainfall
+aliases are collected explicitly. If no recognized flow variable exists,
+`flow_index` is `None`; another covariate is never silently substituted.
+
+The graph-free v0.2 backbone exposes an intermediate tensor contract without
+flattening public axes:
+
+```text
+history_states [B,T_in,N,D]
+scale_states   [B,K,N,D]
+horizon_states [B,30,N,D]
+prediction     [B,30,N,3]
+```
+
 ## River graph
 
 The edge table uses:

@@ -14,6 +14,7 @@ import numpy as np
 import polars as pl
 import torch
 
+from .feature_roles import resolve_feature_roles
 from .schema import TARGET_NAMES, RiverGraph, TimeSeriesData
 
 
@@ -305,6 +306,7 @@ def load_real_daily_dataset(path: str | Path) -> TimeSeriesData:
             "dates",
             "node_ids",
             "target_names",
+            "variable_names",
         }
         missing = required.difference(archive.files)
         if missing:
@@ -314,6 +316,8 @@ def load_real_daily_dataset(path: str | Path) -> TimeSeriesData:
             raise ValueError(
                 f"target order must be {TARGET_NAMES}, found {target_names}"
             )
+        variable_names = tuple(archive["variable_names"].astype(str).tolist())
+        resolve_feature_roles(variable_names)
         dates = archive["dates"].astype("datetime64[D]")
         if dates.size < 2 or not np.all(np.diff(dates).astype(int) == 1):
             raise ValueError("prepared dates must be a contiguous daily sequence")
@@ -334,6 +338,7 @@ def load_real_daily_dataset(path: str | Path) -> TimeSeriesData:
             edge_attr=torch.from_numpy(edge_attr).float(),
             static=torch.from_numpy(static).float(),
         ),
+        variable_names=variable_names,
     )
     data.validate()
     return data

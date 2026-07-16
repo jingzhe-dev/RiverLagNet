@@ -140,6 +140,7 @@ def test_real_daily_preparation_can_append_original_dynamic_covariates(
     data = load_real_daily_dataset(summary.dataset_path)
 
     assert data.values.shape == (20, 2, 4)
+    assert data.variable_names == ("NH3N", "CODMn", "TP", "Temp")
     assert data.observed[..., 3].all()
     with np.load(summary.dataset_path) as archive:
         assert archive["variable_names"].tolist() == ["NH3N", "CODMn", "TP", "Temp"]
