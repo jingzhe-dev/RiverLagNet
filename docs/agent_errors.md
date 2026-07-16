@@ -127,3 +127,11 @@
 - 2026-07-15｜用 `fast_dev_run` 后的 `Trainer.max_steps` 断言预算配置传播，导致测试错误失败｜忽略了 Lightning 会把 fast-dev 的公开步数强制重写为 1｜改用非 fast-dev 的 2-step 短运行验证预算传播｜后续不得用 fast-dev 模式断言用户配置的训练上限
 - 2026-07-15｜把预算传播测试改成 epoch 内提前停止的非 fast-dev 运行，触发缺少验证指标的 strict EarlyStopping｜未考虑 `max_steps` 可在首次 validation 前终止｜改为断言 CLI 返回的已解析预算元数据并保留 fast-dev 链路 smoke｜短预算测试不得依赖完整 epoch/validation 控制流
 - 2026-07-15｜RuntimeStats 把含设备名和 matmul 策略的完整硬件字典传给 TensorBoard scalar logger｜混淆了机器可读 JSON 元数据与数值指标接口｜logger 仅接收数值字段，完整字典只写硬件 JSON｜新增运行元数据时必须区分标量日志与结构化产物
+- 2026-07-15｜首次 Blackwell smoke 在 BF16 fused AdamW 与 Trainer 梯度裁剪组合上失败｜未验证 Lightning 2.6 会把无 GradScaler 的 BF16 fused optimizer 也视为内部 unscale｜在 module hook 中仅对无 scaler 的 fused 路径手动裁剪未缩放梯度并增加真实 CUDA 回归测试｜正式 GPU 配置必须用真实 optimizer/precision/clipping 组合做 smoke
+- 2026-07-15｜第二次硬件 smoke 完成训练后在 CUDA 峰值收尾时报 module 位于 CPU｜测量回调在 Lightning teardown 后仍动态读取 `pl_module.device`｜计时开始时冻结 CUDA device 并用于全部同步和峰值查询｜跨 teardown 的回调不得依赖 module 当前设备
+- 2026-07-15｜首次完整矩阵的 batch 24 跨 epoch 后因禁用 validation 却保留 `ReduceLROnPlateau(val_macro_nse)` 而中断｜复用正式 module 时未隔离依赖验证指标的 scheduler｜为无指标硬件基准显式禁用 scheduler、保留相同 AdamW，并增加配置测试｜关闭验证的吞吐任务必须同步关闭所有验证指标消费者
+- 2026-07-15｜论文文档首次自动核对脚本对 Decimal 调用不存在的 `Substring` 方法并提前退出｜加入了无实际用途且未经核对的类型转换检查｜删除该检查并重新运行同一组文档、实验数值和 Git 差异校验｜验证脚本只保留直接断言，新增类型操作前先确认对象类型
+- 2026-07-15｜论文文档第二次自动核对把清单整数 `3972` 与正文千分位格式 `3,972` 直接比较并误报缺失｜验证逻辑忽略了面向读者的数字格式化｜按千分位格式生成预期文本后重新核对｜机器记录与成稿互查时先统一数值格式，不用原始字符串直接比较
+- 2026-07-15｜首轮硬件矩阵用 accumulation=1 比较不同 physical batch，导致 optimizer steps/s 对应不同样本曝光｜只实现了 Task 6 的物理批量网格，遗漏设计中“物理批量不同时以梯度累积保持有效批量”的公平性约束｜以候选批量最小公倍数 96 固定 effective batch，并把 accumulation 和有效批量写入每条测量及测试｜吞吐矩阵在开始长跑前必须断言所有候选的每更新样本曝光一致
+- 2026-07-16｜等曝光硬件矩阵被会话消息中断后丢失已完成候选｜基准器只在全流程结束时写最终 JSON，没有逐候选持久化｜增加带协议签名、逐条 fsync 的 JSONL journal 和自动续跑测试，最终产物成功后才删除 journal｜任何超过单个候选时长的矩阵任务必须先实现原子进度保存与恢复
+- 2026-07-16｜top-2 三次重复后选择器把仅测一次的第三名重新选为赢家并错误启动 compile｜最终排名仍混入所有首轮候选，没有要求同等重复次数｜最终选择增加 `minimum_repetitions=3` 门槛并用失败测试覆盖未重复的更快候选｜重复测量协议必须把重复数作为候选资格条件，而不只计算已有样本的中位数

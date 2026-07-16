@@ -4,8 +4,8 @@ split_name: v02_fold_a
 input_window: 180
 output_window: 30
 batch_size: 8
-num_workers: 4
+num_workers: 0
 pin_memory: true
-persistent_workers: true
+persistent_workers: false
 prefetch_factor: 2
 seed: ${seed}

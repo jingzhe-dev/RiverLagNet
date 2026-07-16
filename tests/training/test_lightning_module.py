@@ -1,5 +1,8 @@
 import torch
+import pytest
+from lightning.pytorch import Trainer
 
+from RiverLagNet.cli import train as train_cli
 from RiverLagNet.data.datamodule import RiverDataModule
 from RiverLagNet.training.lightning_module import RiverForecastModule, build_model
 
@@ -56,3 +59,59 @@ def test_fused_adamw_request_falls_back_for_cpu_parameters() -> None:
     assert optimizer.defaults["lr"] == 6e-4
     assert optimizer.defaults["weight_decay"] == 1e-3
     assert optimizer.defaults.get("fused") is not True
+
+
+def test_benchmark_optimizer_can_disable_validation_scheduler() -> None:
+    data = RiverDataModule(num_days=180, num_nodes=4, input_window=20, output_window=10)
+    data.setup("fit")
+    model = build_model("station_gru", data.data_spec, output_window=10, hidden_dim=8)
+    module = RiverForecastModule(model, use_lr_scheduler=False)
+
+    optimizer_config = module.configure_optimizers()
+
+    assert set(optimizer_config) == {"optimizer"}
+
+
+def test_optional_compile_flag_is_applied_only_when_enabled(monkeypatch) -> None:
+    model = torch.nn.Linear(2, 1)
+    compiled = torch.nn.Linear(2, 1)
+    calls: list[torch.nn.Module] = []
+
+    def fake_compile(candidate: torch.nn.Module) -> torch.nn.Module:
+        calls.append(candidate)
+        return compiled
+
+    monkeypatch.setattr(torch, "compile", fake_compile)
+
+    assert train_cli._maybe_compile_model(model, enabled=False) is model
+    assert train_cli._maybe_compile_model(model, enabled=True) is compiled
+    assert calls == [model]
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_bf16_fused_adamw_supports_gradient_clipping() -> None:
+    data = RiverDataModule(
+        num_days=180,
+        num_nodes=4,
+        input_window=20,
+        output_window=10,
+        batch_size=2,
+    )
+    data.setup("fit")
+    model = build_model("station_gru", data.data_spec, output_window=10, hidden_dim=8)
+    module = RiverForecastModule(model, fused_adamw=True)
+    trainer = Trainer(
+        accelerator="gpu",
+        devices=1,
+        precision="bf16-mixed",
+        gradient_clip_val=1.0,
+        fast_dev_run=True,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+    )
+
+    trainer.fit(module, datamodule=data)
+
+    assert trainer.state.finished

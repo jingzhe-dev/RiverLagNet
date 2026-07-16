@@ -53,7 +53,13 @@ def test_runtime_stats_write_throughput_and_memory_json(tmp_path: Path) -> None:
 def test_blackwell_config_and_tf32_high_contract() -> None:
     config_dir = Path(__file__).resolve().parents[2] / "configs"
     with initialize_config_dir(version_base="1.3", config_dir=str(config_dir)):
-        cfg = compose(config_name="config", overrides=["trainer=blackwell_96gb"])
+        cfg = compose(
+            config_name="config",
+            overrides=[
+                "trainer=blackwell_96gb",
+                "data=china_real_daily_contracted_1068_v02",
+            ],
+        )
 
     previous = torch.get_float32_matmul_precision()
     try:
@@ -65,4 +71,8 @@ def test_blackwell_config_and_tf32_high_contract() -> None:
     assert cfg.trainer.devices == 1
     assert cfg.trainer.precision == "bf16-mixed"
     assert cfg.trainer.fused_adamw is True
-    assert cfg.trainer.effective_batch_size == 32
+    assert cfg.trainer.effective_batch_size == 96
+    assert cfg.trainer.compile_model is False
+    assert cfg.data.batch_size == 8
+    assert cfg.data.num_workers == 0
+    assert cfg.data.persistent_workers is False

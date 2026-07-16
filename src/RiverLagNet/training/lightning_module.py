@@ -8,7 +8,9 @@ from typing import Any
 
 import torch
 from lightning.pytorch import LightningModule
+from lightning.pytorch.utilities import GradClipAlgorithmType
 from torch import Tensor, nn
+from torch.optim import Optimizer
 
 from RiverLagNet.data.datamodule import DataSpec
 from RiverLagNet.data.schema import TARGET_NAMES
@@ -73,6 +75,7 @@ class RiverForecastModule(LightningModule):
         target_mean: Sequence[float] | None = None,
         target_scale: Sequence[float] | None = None,
         fused_adamw: bool = False,
+        use_lr_scheduler: bool = True,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
@@ -167,6 +170,8 @@ class RiverForecastModule(LightningModule):
             weight_decay=self.hparams.weight_decay,
             **optimizer_options,
         )
+        if not bool(self.hparams.use_lr_scheduler):
+            return {"optimizer": optimizer}
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="max", factor=0.5, patience=3
         )
@@ -178,6 +183,30 @@ class RiverForecastModule(LightningModule):
                 "interval": "epoch",
             },
         }
+
+    def configure_gradient_clipping(
+        self,
+        optimizer: Optimizer,
+        gradient_clip_val: float | int | None = None,
+        gradient_clip_algorithm: GradClipAlgorithmType | None = None,
+    ) -> None:
+        """Clip unscaled BF16 fused-optimizer gradients before the optimizer step."""
+        fused = bool(optimizer.defaults.get("fused"))
+        scaler = getattr(self.trainer.precision_plugin, "scaler", None)
+        if fused and scaler is None:
+            clip_value = float(gradient_clip_val or 0.0)
+            if clip_value <= 0.0:
+                return
+            if gradient_clip_algorithm == GradClipAlgorithmType.VALUE:
+                torch.nn.utils.clip_grad_value_(self.parameters(), clip_value)
+            else:
+                torch.nn.utils.clip_grad_norm_(self.parameters(), clip_value)
+            return
+        super().configure_gradient_clipping(
+            optimizer,
+            gradient_clip_val=gradient_clip_val,
+            gradient_clip_algorithm=gradient_clip_algorithm,
+        )
 
     def _evaluation_step(self, batch: dict[str, Tensor], stage: str) -> Tensor:
         prediction = self(batch)

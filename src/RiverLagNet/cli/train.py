@@ -48,6 +48,11 @@ def _set_matmul_precision(value: str) -> None:
     torch.set_float32_matmul_precision(value)
 
 
+def _maybe_compile_model(model: torch.nn.Module, *, enabled: bool) -> torch.nn.Module:
+    """Compile a model only when the measured hardware profile retained it."""
+    return torch.compile(model) if enabled else model
+
+
 def _load_warm_start(module: RiverForecastModule, checkpoint_path: Path) -> None:
     """Load a trusted local Lightning checkpoint before residual training."""
     if not checkpoint_path.is_file():
@@ -197,6 +202,10 @@ def run(cfg: DictConfig) -> dict[str, Any]:
                 "lag_refinement_only is mutually exclusive with other refinement modes"
             )
         model.configure_lag_refinement_training()
+    module.model = _maybe_compile_model(
+        module.model,
+        enabled=bool(cfg.trainer.compile_model),
+    )
     run_dir = Path(str(cfg.run_dir))
     runtime = RuntimeStatsCallback(output_path=run_dir / "hardware.json")
     callbacks = [runtime, LearningRateMonitor(logging_interval="epoch")]
