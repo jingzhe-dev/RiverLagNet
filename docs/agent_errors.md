@@ -139,3 +139,5 @@
 - 2026-07-16｜复跑 CUDA 回归测试的首次工具调用因 JavaScript 工作目录字符串中的反斜杠被解析为八进制转义而未执行｜Windows 路径没有使用原始字符串或双重转义｜改用 `String.raw` 保存工作目录并重新执行同一测试｜在 JavaScript 工具编排中统一用原始字符串表达 Windows 路径
 - 2026-07-16｜Session A 交付审计的首次并行工具调用因嵌套 PowerShell 正则引号破坏 JavaScript 字符串而未执行｜混用了 JavaScript 单引号和 PowerShell 双单引号转义｜把包含正则的命令整体改为 `String.raw` 模板后重新执行｜嵌套 shell 命令优先使用原始模板字符串，不跨语言复用引号转义规则
 - 2026-07-16｜Session B 接管审计的首次并行工具调用因内嵌 Python 字符串引号破坏 JavaScript 源码而未执行｜在普通 JavaScript 单引号字符串中嵌套了 PowerShell 与 Python 的多层单引号｜将各命令统一改为 `String.raw` 模板并简化 Python 输出拼接后重跑｜三层语言嵌套命令必须从最外层使用原始模板字符串并避免复用同类引号
+- 2026-07-17｜Task 3 接口审计读取了不存在的 `tests/models/test_models.py`｜未先用文件清单确认模型测试文件名｜改读已存在的 `test_baselines.py` 并列出 `tests/models`｜读取测试前先用 `rg --files` 获取权威路径
+- 2026-07-17｜Task 3 首次 `rg` 在 Windows 上把 `src/RiverLagNet/models/*.py` 作为路径传入而报错｜再次依赖 shell 展开通配符而 PowerShell 未替 `rg` 展开｜改用固定目录加 `-g "*.py"`｜Windows 下所有 `rg` 文件模式统一通过 `-g` 传递

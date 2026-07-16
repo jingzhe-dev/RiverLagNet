@@ -2,7 +2,7 @@ import torch
 
 from RiverLagNet.models.decoder import MultiHorizonMultiTargetDecoder, UpstreamResidualDecoder
 from RiverLagNet.models.fusion import BoundedLinearHorizonGate, LocalUpstreamGatedFusion
-from RiverLagNet.models.input_encoder import InputMaskEncoder
+from RiverLagNet.models.input_encoder import InputMaskEncoder, TargetExogenousInputEncoder
 from RiverLagNet.models.temporal_gru import NodeTemporalGRU
 
 
@@ -16,6 +16,24 @@ def test_input_encoder_and_temporal_gru_preserve_time_and_node_axes() -> None:
     h_seq, h_local = NodeTemporalGRU(8, hidden_dim=10)(encoded)
     assert h_seq.shape == (batch, history, nodes, 10)
     assert h_local.shape == (batch, nodes, 10)
+
+
+def test_target_exogenous_encoder_uses_learned_context_without_exogenous_channels() -> None:
+    encoder = TargetExogenousInputEncoder(
+        value_dim=3,
+        static_dim=2,
+        time_dim=4,
+        hidden_dim=8,
+        target_dim=3,
+    )
+    x = torch.randn(2, 6, 4, 3)
+    mask = torch.ones_like(x, dtype=torch.bool)
+
+    output = encoder(x, mask, None, torch.randn(4, 2), torch.randn(2, 6, 4))
+
+    assert output.shape == (2, 6, 4, 8)
+    assert encoder.no_exogenous_token is not None
+    assert torch.isfinite(output).all()
 
 
 def test_decoder_keeps_horizon_node_and_target_dimensions() -> None:
